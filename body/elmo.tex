@@ -1,0 +1,320 @@
+\chapter{基于局部信息的上下文相关词向量模型}[Localized and Contextualized Word Embedding]\label{chp:elmo}
+
+\section{简介}[Introduction]
+
+包括ELMo\cite{peters-EtAl:2018:N18-1}、Bert\cite{DBLP:journals/corr/abs-1810-04805}在内的
+上下文相关词向量在多项句法语义任务上取得了巨大成功。
+但这些成功也伴随着巨大的资源开销。
+在一亿词语言模型数据数据集（1-billion word benchmark，文献\cite{DBLP:conf/interspeech/ChelbaMSGBKR14}）
+训练ELMo需要4块NVIDIA1 P100 GPU并行运行7天左右，
+训练Bert需要4块256核TPU运行4天。
+同样的计算量可以这算为8块NVIDIA V100运行40到70天\footnote{http://timdettmers.com/2018/10/17/tpus-vs-gpus-for-transformers-bert/}。
+巨大的开销使得
+在同等规模的数据上重新训练模型几乎不可能。
+
+同时，ELMo、Bert一类模型的一个重要特点是，
+这些建模上下文的模型依赖整句作为输入。
+这一限制其不具备建模流式数据的能力；
+同时无法进行词级别的并行。
+
+本文尝试回答针对句法任务，能否使用
+简单的网络进行上下文相关词向量的建模，并达到和复杂网络相近的性能。
+基于上述假设，
+本文提出一种基于前馈神经网络与自注意力机制的
+上下文相关词向量。
+
+在多项序列标注任务中，
+本文提出的上下文相关词向量
+取得了与ELMo相近甚至更好的准确率，
+但运行速度更快。
+同时本文模型也表明
+只使用局部模型建模上下文相关词向量具有可行性。
+
+\section{问题定义}[Problem Definition and Notation]
+
+\subsection{一般上下文相关词向量}
+
+上下文相关词向量是根据
+上下文给一个词以向量化表示的问题。
+
+定义长度为$n$的输入句子为$x_1, ..., x_n$，
+上下文相关词向量可以表示为
+\begin{align*}
+\mathbf{v}_i &= \phi(x_i)  \\
+\mathbf{E} &= \text{ENC}(\mathbf{v}_1, ..., \mathbf{v}_n)\text{。}
+\end{align*}
+其中，$\mathbf{E} \in \mathbf{R}^{n \times l \times d}$。
+这里，$d$是表示每个词所用的向量的长度，$l$是层数。
+$\mathbf{E}_t \in \mathbf{R}^{l\times d}$表示第$t$个词在$x_1, ..., x_n$
+中的上下文相关词向量。
+
+对于使用双向语言模型的上下文相关词向量，需要定义从左向右（$\overrightarrow{\text{ENC}}$）
+以及从右向左（$\overleftarrow{\text{ENC}}$）两个编码器。
+\[
+\mathbf{E}_t = \overrightarrow{\text{ENC}}(\mathbf{v}_1, ..., \mathbf{v}_t) \oplus \overleftarrow{\text{ENC}}(\mathbf{v}_t, ..., \mathbf{v}_n)\text{。}
+\]
+
+上下文相关词向量通常有两部分组成，即：1）词模型$\phi$；2）上下文模型ENC。
+其中，词模型将一个词$x_i$通过函数$\phi$映射为向量$\mathbf{v}_i$。
+上下文模型则以映射后的向量序列$\mathbf{v}_1, ..., \mathbf{v}_n$为输入
+产生最终输出$\mathbf{E}$。
+
+\subsection{基于局部信息的上下文相关词向量}
+
+基于局部信息的上下文相关词向量是一般上下文相关词向量的一种特例。
+这种词向量是基于``一个词的上下文只与有限窗口的词有关''这一假设。
+假设这个窗口大小为$W$，第$k$个词的上下文相关词向量$\mathbf{E}_k$
+可以表示为$\mathbf{E}_k = \text{ENC}_k (w_{k-W}, ..., w_{k}, ..., w_{k+W})$。
+通常不同位置的编码器不予区分，所以$\text{ENC}_k = \text{ENC}$。
+
+对于使用双向语言模型的建模上下文相关词向量，第$k$个词对应的
+词向量可以表示为
+\[
+\mathbf{E}_k = \overrightarrow{\text{ENC}}(w_{k-W}, ..., w_k) \oplus \overleftarrow{\text{ENC}}(w_k, ..., w_{k+W})\text{。}
+\]
+
+\subsection{基于语言模型的上下文相关词向量的模型学习}
+
+文献\inlinecite{peters-EtAl:2018:N18-1}以语言模型为学习为学习目标，
+学习编码器的参数。具体来讲，其学习目标为
+\[
+\mathbf{\Theta} =
+ \argmin_{\mathbf{\Theta}} 
+ \sum_{k=1}^N \log p(w_{k+1} \mid w_1, ..., w_k; \mathbf{\Theta}_{\overrightarrow{\text{ENC}}}) + \log p(w_{k-1} \mid w_k, ..., w_n; \mathbf{\Theta}_{\overleftarrow{\text{ENC}}})\text{。}
+\]
+其中，$\mathbf{\Theta} = \mathbf{\Theta}_{\overrightarrow{\text{ENC}}} \cup \mathbf{\Theta}_{\overleftarrow{\text{ENC}}}$。
+
+\section{基于局部信息的上下文相关词向量模型}[Model]
+
+\yjcomment{LSTM只能记忆优先长度的信息。}
+\yjcomment{能否用context近似LSTM的效果}
+\yjcomment{局部信息对于tagging更重要。}
+
+\subsection{词编码器}[Token-level Encoder]
+
+\subsubsection{词/词片段向量}
+
+一种方法是使用词向量。
+
+\subsubsection{字级别CNN}
+
+另一种方法是使用字级别CNN。
+
+\subsection{上下文编码器}[Context Encoder]
+
+\subsubsection{Bengio03}
+
+文献\inlinecite{NIPS2000_1839}提出的
+语言模型将一定窗口内的向量化的词拼接成一个
+向量并输入多层感知器（MLP）。
+以从左向右的表示为例，$\overrightarrow{\mathbf{E}_k}$可以形式化地表示为
+\begin{align}
+\mathbf{c}_k &= \oplus_{i=k-W}^k \mathbf{v}_i \\
+\overrightarrow{\mathbf{E}_k} & = \overrightarrow{\text{MLP}}(\mathbf{c}_k) + \mathbf{c}_k \label{eq:bengio03}
+\end{align}
+对于多层感知器，文献\inlinecite{NIPS2000_1839}
+使用tanh作为中间层的激活函数，
+即$\text{MLP}(\mathbf{x}) = \mathbf{W}^2 \cdot \text{tanh}(\mathbf{W}^1 \cdot \mathbf{x} + \mathbf{b}^1) + \mathbf{b}^2$。
+
+本文使用高速公路网络（Highway Network，文献\inlinecite{DBLP:journals/corr/SrivastavaGS15}）作为MLP的一种
+替代。具体来讲，
+$
+\text{Highway}(\mathbf{x}) = (1 - g(\mathbf{x}))\cdot \mathbf{x} + g(\mathbf{x})\cdot f(\mathbf{x})\text{。}
+$
+其中，映射函数$f(\mathbf{x})$与MLP相同；
+门函数$g(\mathbf{x}) \in R$，用来表示原始输入向量$\mathbf{x}$在输出向量中的占比。
+公式\ref{eq:bengio03}可以认为是Highway Network的一种特例，即$g(\mathbf{x})$是常数0.5。
+需要指出的是，$g(\mathbf{x})$与$f(\mathbf{x})$类似，都是可学习的函数。
+
+\subsubsection{LBL}
+Minh等人2007年提出的LBL模型\cite{Mnih:2007:TNG:1273496.1273577}
+与Bengio03\cite{NIPS2000_1839}类似，也是一种局部模型。
+不同于Bengio03，LBL采用上下文词向量的加权求和作为
+上下文的表示。
+具体来讲，LBL可以描述为：
+\begin{align*}
+\mathbf{c}_k & = \sum_{i=k-W}^k c_{k-i} \cdot \mathbf{v}_i \text{。} \\
+\overrightarrow{\mathbf{E}_k} & = \overrightarrow{\text{MLP}}(\mathbf{c}_k)\text{。}
+\end{align*}
+其中，$c_{k-i}$是一个距离相关的参数，使得模型可以根据距离
+选择不同的上下文的重要程度。
+
+与Bengio03类似，本文在实践中也采用Highway Network取代$\text{MLP}$。
+
+\subsubsection{局部自注意机制}
+LBL使用加权求和的思路表示上下文。
+其中的权重与相对位置相关，与上下文内容无关，并且可以解释为
+对于窗口内词的重要程度的一种度量。
+直觉上讲，这一表示方式允许模型产生``距离越近越重要''
+的表示。
+然而，距离并不是上下文对于一个词的重要程度唯一度量。
+词的内容也应该成为对其重要程度的一种度量。
+基于上述假设，
+本文提出一种基于自局部注意力机制的建模权重的方法。
+
+与LBL类似，本文采用上下文加权求和的方式表示上下文。即
+\begin{align}
+\mathbf{c}_k & = \sum_{i=k-W}^k a_i  \cdot \mathbf{v}_i  \label{eq:selfatt}\\
+\overrightarrow{\mathbf{E}_k} & = \overrightarrow{\text{Highway}}(\mathbf{c}_k)\text{。}
+\end{align}
+但权重$a_{k-i}$是通过自注意机制\cite{DBLP:journals/corr/BahdanauBXGLPCB16,luong-pham-manning:2015:EMNLP,NIPS2017_7181}计算的。
+形式化地，
+\[
+a_i= \text{softmax}(\frac{(\mathbf{W}^{\text{query}} \mathbf{a}_i)^T \cdot (\mathbf{W}^{\text{key}} \mathbf{a}_k)}{\sqrt{|\mathbf{v}|}})\text{。}
+\]
+其中，$a_i$仅由局部上下文决定，即$k-W \le i \le k$。
+实践中，本文使用多头自注意力机制（Multi-headed Self Attention，文献\inlinecite{NIPS2017_7181}）建模$a_{k-i}$。
+
+如前文所述，
+$a_i$与$c_{k-i}$
+分别从内容本身以及相对距离
+两个维度对于上下文词的重要程度进行了建模。
+为了同时建模词自身表现出的重要程度以及相对距离表现的重要层度，
+本文将公式\ref{eq:selfatt}修改为$\mathbf{c}_k = \sum_{i=k-W}^k (a_i + c_{k-i})  \cdot \mathbf{v}_i$，
+使得上下文表示即关注内容，又关注相对距离。
+
+\subsubsection{多层机制}
+Peters等人在文献\inlinecite{peters-EtAl:2018:N18-1,peters-EtAl:2018:EMNLP}
+中强调了对于上下文进行多次抽象的重要性，即多层机制。
+本文提出的上下文模型对应单层情况，但其可以很容易地使用
+多层机制进行拓展。
+下面给出一个两层拓展结合自注意力机制的LBL模型的方法。
+\begin{align*}
+\mathbf{v}_k^{(0)} &= \mathbf{v}_k; &
+ \mathbf{c}^{(0)}_k & = \sum_{i=k-W}^k (a_i^{(0)} + c_{k-i}^{(0)}) \cdot \mathbf{v}_k^{(0)}; &
+ \mathbf{E}^{(0)} &= \overrightarrow{\text{Highway}^{(0)}}(\mathbf{c}^{(0)}_k)\\
+\mathbf{v}_k^{(1)} & = \mathbf{E}_k^{(0)}; &
+ \mathbf{c}^{(1)}_k & = \sum_{i=k-W}^k (a_i^{(1)} + c_{k-i}^{(1)}) \cdot \mathbf{v}_k^{(1)}; &
+ \mathbf{E}^{(1)}  &= \overrightarrow{\text{Highway}^{(0)}}(\mathbf{c}^{(1)}_k)\\
+\mathbf{v}_k^{(2)} & = \mathbf{E}_k^{(1)}; &
+ \mathbf{c}^{(2)}_k & = \sum_{i=k-W}^k (a_i^{(2)} + c_{k-i}^{(2)}) \cdot \mathbf{v}_k^{(2)}; &
+\mathbf{E}^{(2)}  &= \overrightarrow{\text{Highway}^{(2)}}(\mathbf{c}^{(2)}_k)\text{。}
+\end{align*}
+其中，不同层采用不同的自注意力网络计算$a_t^{j}$。
+
+可以看出，在多层机制中，不同层次使用不同的模型。
+这使得算法可以算法可以从不同的特征角度对上下文进行抽象。
+
+\subsection{训练}
+
+使用sampled softmax\yjcomment{citation}。
+
+\section{序列标注模型}
+
+本文参考文献\inlinecite{ma-hovy:2016:P16-1,lample-EtAl:2016:N16-1}，使用
+当前性能最好的biLSTM-CRF建模序列标注模型。
+具体来讲，biLSTM-CRF将代表句子的词向量序列输入到双向LSTM中，并利用双向LSTM
+的隐层输计算每个词在CRF模型中的发射特征（emission features）的分数。
+具体模型如图\yjcomment{complete me}所示。
+
+文献\inlinecite{reimers-gurevych:2017:EMNLP2017}对于
+影响biLSTM序列标注模型性能的关键因素进行了详细的研究。
+这些因素包括：1）输入词向量的选取；2）是否使用CRF层；3）LSTM层数；4）LSTM隐层大小；
+5）优化器选取；6）是否使用Dropout。
+根据文献\inlinecite{reimers-gurevych:2017:EMNLP2017}，词向量、CRF、优化器、Dropout
+对于biLSTM序列标注的影响最大。
+可以想见，在固定后三个因素的条件下，序列标注模型的性能可以作为评价词向量好坏的
+标准。
+
+基于文献\inlinecite{reimers-gurevych:2017:EMNLP2017}，
+本文使用CRF\cite{Lafferty:2001:CRF:645530.655813}作为序列标注模型，
+使用Adam算法\cite{DBLP:journals/corr/KingmaB14}优化参数，
+并使用文献\yjcomment{cite gal drop}提出的recurrent dropout技术训练模型参数。
+
+对于输入，
+本文参考文献\inlinecite{peters-EtAl:2018:N18-1}使用上下文相关词向量的方法。
+具体来讲，输入$\mathbf{x} = \sum_i s_i \mathbf{E}_i (\mathbf{x})$。
+
+\section{实验}[Experiments]
+\begin{table}[t]
+		\centering
+	\begin{tabular}{r cccc}
+		\hline
+		数据集 & 标签数 & 训练集 & 开发集 & 测试集 \\
+		\hline
+		组块识别 (CoNLL00) & 15 & 8,936 & 1,844 & 2,012 \\
+		命名实体识别 (CoNLL03) & 9 & 14,041 & 3,250 & 3,453 \\
+		词性标注 (PTB500) & 41 & 500 & 5,527 & 5,462 \\
+		词性标注 (en\_ewt) & 17 & 12,543 & 2,002 & 2,077 \\
+		实体识别 (ACE05) & 15 & 10,052 & 2,421 & 2,050 \\
+		\hline
+	\end{tabular}
+	\caption{数据集信息}\label{tbl:elmo:stats}
+\end{table}
+
+\subsection{设置}
+本文在若干句法相关的序列标注上进行了实验。
+本文关注的任务包括组块识别（CoNLL00\yjcomment{citation}），
+命名实体识别（CoNLL03\yjcomment{citation}），词性标注（PTB\cite{Marcus93buildinga}、en\_ewt）以及
+实体识别（ACE05）。
+这些任务
+统一被统一建模为序列标注问题。
+数据集的统计信息如表\ref{tbl:elmo:stats}
+所示。
+对于PTB数据集，本文参考文献\inlinecite{reimers-gurevych:2017:EMNLP2017}
+中的设置，选用PTB数据集的前500句作为训练数据，以构造数据稀缺的情况。
+
+本文使用CoNLL 2017 shared task\cite{udst:overview2017}提供的生语料作为上下文相关词向量的训练数据。
+这一语料由维基百科与互联网数据（Common Crawl）构成。
+本文从原始数据中按照不同规模进行了采用。
+采用数据的规模分别为10m，20m，50m，100m。
+同时，本文也使用Google 1 billion lm benchmark作为最大规模的生语料。
+这一数据包括近800m的训练数据。
+
+\yjcomment{宽度：4，8，16。}
+\yjcomment{层数：1，2}
+\yjcomment{迭代次数}
+
+\subsection{模型比较}
+\begin{table}[t]
+	\centering
+	\bicaption{}{使用100M词数据集训练的结果。}{Table$\!$}{}\label{tbl:elmo:res}
+	\begin{tabular}{r cccccc}
+		\hline
+		模型 & CoNLL00 & CoNLL03 & PTB500 & en\_ewt & ACE05 & 平均 \\
+		\hline
+		ELMo & \bf 95.83 & \bf 90.21 & \bf 96.06 & 96.56 & 82.96 &\bf 92.33 \\
+		\hdashline
+		Word2vec & 94.37 & 87.18 & 92.68 & 94.26 & 82.66 & 90.30 \\
+		\hdashline
+		Bengio03 (l=1) & 95.56 & 88.76 & 95.59 & 96.37 & 82.83 & 91.82 \\
+		LBL (l=1)& 95.28 & 89.03 & 95.46 & 96.32 & 83.91 & 92.00 \\
+		SelfAttn (l=1) & 95.26 & 89.03 & 95.51 & 96.34 & 83.35 & 91.90 \\
+		SelfAttn+LBL (l=1) & 95.30 & 89.30 & 95.78 & 96.45 &\bf 84.50 & 92.27 \\
+		SelfAttn+LBL (l=2) & 95.61 & 89.43 & 95.94 &\bf 96.57 & 84.05 & 92.32 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+本文结果如表\ref{tbl:elmo:res}所示。
+在数据量为100m时，SelfAttn+LBL与ELMo模型性能
+类似。
+
+\subsection{分析}
+
+\subsubsection{迭代次数的影响}
+
+\subsubsection{上下文宽度的影响}
+
+\subsection{最终结果}
+\begin{table}[t]
+	\centering
+	\begin{tabular}{r cccccc}
+		\hline
+		模型 & CoNLL00 & CoNLL03 & PTB500 & en\_ewt & ACE05 & 平均 \\
+		\hline
+		ELMo (small) & 94.81 & 90.13 & 95.92 & 96.04 & 84.93 & 92.36 \\
+		ELMo (medium) & 95.62 & 90.64 & 96.48 & 96.23 & 85.02 & 92.98 \\
+		ELMo (large) & \bf 96.00 & \bf 91.68 & \bf 96.73 & \bf 96.40 & \bf 85.77 & \bf 93.32 \\
+		\hdashline
+		SelfAttn+LBL (l=2) & & & & & & \\
+		\hline
+	\end{tabular}
+	\caption{最终评测结果。}\label{tbl:elmo:final_res}
+\end{table}
+
+
+\section{语义任务评价}[Semantic Tasks Evaluations]
+
+
+\section{本章小结}[Conclusion]

@@ -1,13 +1,17 @@
 \begin{denotation}
-\begin{table}[h]%此处最好是h
-\caption{国际单位制中具有专门名称的导出单位}
-\vspace{0.5em}\centering\wuhao
-\begin{tabular}{ccccc}
-\toprule[1.5pt]
-量的名称&单位名称&单位符号&其它表示实例\\
-\midrule[1pt]
-频率&赫[兹]&Hz&s-1\\
-\bottomrule[1.5pt]
-\end{tabular}
-\end{table}
+
+为了更一致地描述上下文相关词向量以及基础自然语言处理相关的技术，
+全文的符号系统统一如下：
+
+\begin{itemize}
+\item 长度为$n$的广义符号序列：$\ninputs$；
+\item 包含$n$个词的句子：$\nwords$；
+\item 包含$n$个字的词：$\nchars$；
+\item 一个词的向量：$\wordvec$；
+\item 包含$n$个词的词向量序列：$\nwordvecs$；
+\item 对于$x_t$大小为$2m$的窗口：特指以$x_t$为中心，左右各含$m$个词的序列$x_{t-m}, ..., x_t, ..., x_{t+m}$；
+\item 对于$x_t$大小为$m$的窗口：特指以$x_t$为中心，左侧含有$m$个词的序列$x_{t-m}, ..., x_t$；
+\item 词表：$\vocabulary$；
+\end{itemize}
+
 \end{denotation}

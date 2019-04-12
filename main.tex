@@ -72,7 +72,34 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \usepackage{hithesis}
+\usepackage{arydshln}
+\usepackage{bbm}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,shadows}
+\usepackage{longtable}
+\pgfdeclarelayer{background}
+\pgfdeclarelayer{foreground}
+\pgfsetlayers{background,main,foreground}
+\usepackage{tikz-dependency}
+%\usepackage{showframe}
 \graphicspath{{figures/}}
+\newcommand{\yjcomment}[1]{\textcolor{blue}{[#1 -- YL]}}
+\newcommand{\tabitem}{~~\llap{\textbullet}~~}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator*{\argmax}{argmax}
+
+\newcommand{\ninputs}{\left(x_1, \dots, x_n\right)}
+\newcommand{\nwords}{\left(w_1, \dots, w_n\right)}
+\newcommand{\nchars}{\left(c_1, \dots, c_n\right)}
+\newcommand{\wordvec}{\mathbf{v}}
+\newcommand{\nwordvecs}{\left(\mathbf{v}_1, \dots, \mathbf{v}_n\right)}
+\newcommand{\vocabulary}{\mathcal{X}}
+
+\newcommand{\elmoleftctxfn}{\overrightarrow{\text{LSTM}}}
+\newcommand{\elmorightctxfn}{\overleftarrow{\text{LSTM}}}
+\newcommand{\leftctx}{\overrightarrow{\mathbf{h}}}
+\newcommand{\rightctx}{\overleftarrow{\mathbf{h}}}
+\newcommand{\bigv}{\mathbf{\tilde{v}}}
 
 \begin{document}
 
@@ -98,16 +125,20 @@
 %\floatdesign %debug 选项
 %\caption{Float layout with rules}\label{fig:fludf} %debug 选项
 %\end{figure} %debug 选项
-\include{body/introduction}
-
+%\include{body/format_guidance}
+\include{body/intro}
+\include{body/elmo}
+\include{body/seqlabel}
+\include{body/semicrf}
+\include{body/distill}
 \backmatter
 %硕博书序
 \include{back/conclusion}   % 结论
 \bibliographystyle{hithesis} %如果没有参考文献时候
-\bibliography{reference}
-\begin{appendix}%附录
-\input{back/appA.tex}
-\end{appendix}
+\bibliography{tinydb}
+%\begin{appendix}%附录
+%\input{back/appA.tex}
+%\end{appendix}
 \include{back/publications}    % 所发文章
 \include{back/ceindex}    % 索引, 根据自己的情况添加或者不添加，选择自动添加或者手工添加。
 \authorization %授权
