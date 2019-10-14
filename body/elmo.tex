@@ -1,320 +1,926 @@
-\chapter{基于局部信息的上下文相关词向量模型}[Localized and Contextualized Word Embedding]\label{chp:elmo}
+\newcommand{\chtwoassumption}{不同距离、不同内容的上下文在表示一个词时的相关程度不同}
 
-\section{简介}[Introduction]
+\chapter{基于局部信息的上下文相关词向量}[Localized and Contextualized Word Embeddings]\label{chp:elmo}
 
-包括ELMo\cite{peters-EtAl:2018:N18-1}、Bert\cite{DBLP:journals/corr/abs-1810-04805}在内的
-上下文相关词向量在多项句法语义任务上取得了巨大成功。
-但这些成功也伴随着巨大的资源开销。
-在一亿词语言模型数据数据集（1-billion word benchmark，文献\cite{DBLP:conf/interspeech/ChelbaMSGBKR14}）
-训练ELMo需要4块NVIDIA1 P100 GPU并行运行7天左右，
-训练Bert需要4块256核TPU运行4天。
-同样的计算量可以这算为8块NVIDIA V100运行40到70天\footnote{http://timdettmers.com/2018/10/17/tpus-vs-gpus-for-transformers-bert/}。
-巨大的开销使得
-在同等规模的数据上重新训练模型几乎不可能。
+\section{引言}[Introduction]
 
-同时，ELMo、Bert一类模型的一个重要特点是，
-这些建模上下文的模型依赖整句作为输入。
-这一限制其不具备建模流式数据的能力；
-同时无法进行词级别的并行。
+上下文相关词向量\cite{NIPS2017_7209,peters-EtAl:2018:N18-1,P18-1031,gpt1,DBLP:journals/corr/abs-1810-04805}
+是静态词向量\cite{DBLP:journals/corr/abs-1301-3781,NIPS2013_5021,pennington-socher-manning:2014:EMNLP2014,Q17-1010}
+的一种有效替代。
+得益于对于相同的词在不同的上下文环境的更好的建模，
+上下文相关词向量已经给多项句法语义任务带来显著的性能提升。
+这些任务包括：
+问答\cite{peters-EtAl:2018:N18-1,DBLP:journals/corr/abs-1810-04805}、
+语言角色标注\cite{peters-EtAl:2018:N18-1}、
+共指消解\cite{lee-etal-2018-higher}、
+文本蕴含\cite{peters-EtAl:2018:N18-1,DBLP:journals/corr/abs-1810-04805}、
+情感分析\cite{peters-EtAl:2018:N18-1}、
+短语结构句法\cite{P18-1249,joshi-peters-hopkins:2018:Long}
+以及命名实体识别\cite{peters-EtAl:2017:Long,DBLP:journals/corr/abs-1810-04805}。
 
-本文尝试回答针对句法任务，能否使用
-简单的网络进行上下文相关词向量的建模，并达到和复杂网络相近的性能。
-基于上述假设，
-本文提出一种基于前馈神经网络与自注意力机制的
-上下文相关词向量。
+上下文相关词向量的成功主要源于对上下文的合理建模。
+为了合理建模上下文，前人工作往往强调使用\textit{深层网络}对于\textit{整句乃至前后两句}进行多次抽象。
+这种做法使得从大规模文本中学习上下文相关词向量的过程消耗大量的资源。
+Peters等人在2018年的文献\inlinecite{peters-EtAl:2018:N18-1}
+中提出使用双向语言模型作为目标学习上下相关词向量的算法—ELMo。
+他们的模型使用两层LSTM表示上下文。
+根据文献\inlinecite{peters-EtAl:2018:N18-1}，
+在包含80万词的one billion word benchmark语料（1B word benchmark，文献\inlinecite{DBLP:conf/interspeech/ChelbaMSGBKR14}）
+上训练ELMo大约需要1张NVIDIA 1080 Ti显卡两个星期的运算时间。
+Devlin等人在2018年的文献\inlinecite{DBLP:journals/corr/abs-1810-04805}中提出
+使用12层Transformer网络建模上下文的模型 --- BERT。
+根据文献\inlinecite{DBLP:journals/corr/abs-1810-04805}，
+在330万互联网数据上训练BERT需要16个TPU~4天的训练时间。
+这一训练过程等价于在8核NVIDIA~V100显卡上训练44天。\footnote{\url{http://timdettmers.com/2018/10/17/tpus-vs-gpus-for-transformers-bert/}}
+除了超长的训练时间，
+这些使用过量参数（over-parameterized）的模型也很大程度地降低了解码速度，
+使其难于部署到真实世界的应用中。
 
-在多项序列标注任务中，
-本文提出的上下文相关词向量
-取得了与ELMo相近甚至更好的准确率，
-但运行速度更快。
-同时本文模型也表明
-只使用局部模型建模上下文相关词向量具有可行性。
+另一方面，
+对于像词性标注这样的问题，
+使用局部上下文可以很好地表示词。
+在深度学习流行前的时代，
+使用单词窗\footnote{即以要表示的词为中心，左右各取若干个词。}作为``特征''表示词的做法是
+最广泛采用的词表示方法\cite{collins:2002:EMNLP02,Ando:2005:FLP:1046920.1194905,W04-3212,mcdonald2006online}。
+对于神经网络模型，
+单词窗模型也在多项语言分析问题中取得了很好的性能\cite{Collobert:2011:NLP:1953048.2078186,D17-1283}。
+一个有趣的研究问题是\textit{我们需要对在多大窗口的上下文进行建模？
+我们能否牺牲一定的全局性换取速度的提升？}
+Peters等人在2018年的文献\inlinecite{peters-EtAl:2018:EMNLP}中
+尝试将文献\inlinecite{peters-EtAl:2018:N18-1}中的
+LSTM替换为Gated CNN（ GCNN，文献\inlinecite{pmlr-v70-dauphin17a}）
+以及Transformer网络。
+然而，他们的模型仍强调通过
+扩大CNN的感受域（inception field）
+或者
+在整句上使用自注意力机制来表示
+整句的上下文信息。
+局部的上下文表示能够达到怎样的效果仍旧没有得到很好的答案。
 
-\section{问题定义}[Problem Definition and Notation]
+本章在基于双向语言模型的上下文相关词向量的框架\cite{peters-EtAl:2018:N18-1}下
+探索使用单词窗建模上下文的可能性。
+基于``\chtwoassumption''这一假设，
+本章提出一种\textbf{融合相对位置权重的局部自注意力机制}对局部上下文进行表示。
+相较文献\inlinecite{peters-EtAl:2018:EMNLP}中的GCNN和Transformer，
+本章模型并不强调表示整句的上下文信息，
+因而模型更浅、速度更快。
+与使用LSTM的原始ELMo相比，
+这种浅层局部模型在不降低模型性能的前提下获得大约3倍的速度提升。
 
-\subsection{一般上下文相关词向量}
+本章在随机采样的10万词句英文维基百科数据（记为enwiki100m）
+和1B word benchmark两个大规模文本语料库中学习了本章提出的上下文相关词向量，
+并将其应用于
+五个需要对句子句法特性进行建模的序列标注任务\cite{reimers-gurevych:2017:EMNLP2017}中。
+在两个不同数据集的设置下，
+本章提出的
+上下文相关词向量均取得了平均意义上与ELMo相近的性能，
+并在几项任务中超越ELMo。
+在语义角色标注\cite{W13-3516}和共指消解\cite{W12-4501}的
+语义实验也证实了本章提出的上下文相关词向量的表示能力与速度优势。
 
-上下文相关词向量是根据
-上下文给一个词以向量化表示的问题。
+本章的主要贡献包括：
+\begin{itemize}
+	\item 本章提出了一种
+	融合相对位置权重的局部自注意力机制对局部上下文进行表示，
+	并利用这种表示学习上下文相关词向量（\S\ref{sec:elmo:model}）。
+	\item 本章在五项句法任务（\S\ref{sec:elmo:syn-eval}）以及两项语义任务（\S\ref{sec:elmo:sem-eval}）
+	中评价了本章提出的模型的表示能力。
+	句法任务结果显示，本章提出的模型在取得与ELMo相同性能的前提下，三倍地提升了速度。
+	语义任务结果显示，本章提出的模型取得了与ELMo可比的性能。
+	\item 本章以句法任务为目标，
+	研究了影响局部模型性能的重要因素（\S\ref{sec:elmo:ana}）。
+	本章分析显示，使用多层抽象对于上下文的表示能力有重要作用。
+	同时，本章提出的相对位置权重和局部自注意力机制能够相互作用，
+	提高模型表示能力。
+\end{itemize}
 
-定义长度为$n$的输入句子为$x_1, ..., x_n$，
-上下文相关词向量可以表示为
-\begin{align*}
-\mathbf{v}_i &= \phi(x_i)  \\
-\mathbf{E} &= \text{ENC}(\mathbf{v}_1, ..., \mathbf{v}_n)\text{。}
-\end{align*}
-其中，$\mathbf{E} \in \mathbf{R}^{n \times l \times d}$。
-这里，$d$是表示每个词所用的向量的长度，$l$是层数。
-$\mathbf{E}_t \in \mathbf{R}^{l\times d}$表示第$t$个词在$x_1, ..., x_n$
-中的上下文相关词向量。
+本章实验代码开源于：\url{https://github.com/Oneplus/ELMo}.
 
-对于使用双向语言模型的上下文相关词向量，需要定义从左向右（$\overrightarrow{\text{ENC}}$）
-以及从右向左（$\overleftarrow{\text{ENC}}$）两个编码器。
-\[
-\mathbf{E}_t = \overrightarrow{\text{ENC}}(\mathbf{v}_1, ..., \mathbf{v}_t) \oplus \overleftarrow{\text{ENC}}(\mathbf{v}_t, ..., \mathbf{v}_n)\text{。}
-\]
+\section{背景知识}[Background]
 
-上下文相关词向量通常有两部分组成，即：1）词模型$\phi$；2）上下文模型ENC。
-其中，词模型将一个词$x_i$通过函数$\phi$映射为向量$\mathbf{v}_i$。
-上下文模型则以映射后的向量序列$\mathbf{v}_1, ..., \mathbf{v}_n$为输入
-产生最终输出$\mathbf{E}$。
+\subsection{上下文无关词向量}[Static Word Embeddings]
+自然语言处理是研究如何对计算机进行编程进而处理和分析自然语言数据的领域。
+由于词是语言的基本单元，
+计算机处理和分析自然语言数据
+的基本而重要的步骤是将表示为符号的词转换为计算机可以处理的数字表示。
+随着神经网络的发展，
+研究者们提出了多种将词转换成其低维矢向量表示（即词嵌入）的技术。
+这些技术背后的基本假设是词义分布式假设\cite{firth57synopsis}，
+即\textit{一个词的词义可以采用它的上下文进行表示}。
+Word2vec\cite{NIPS2013_5021,DBLP:journals/corr/abs-1301-3781}、
+FastText\cite{Q17-1010}和
+GloVe\cite{pennington-socher-manning:2014:EMNLP2014}是这些技术中的代表。 
+Word2vec通过预测词的上下文来建模分布式假设。
+FastText在除了预测上下文，还用子词（subword）的信息建模了词。
+GloVe通过预测两个单词的共现来建模分布假设。
+他们都在原有词义分布式假设上进一步假设\textit{一个词有唯一的向量表示}。
+这一假设使得上下文无关词向量无法建模``一词多义''等现象。
 
-\subsection{基于局部信息的上下文相关词向量}
-
-基于局部信息的上下文相关词向量是一般上下文相关词向量的一种特例。
-这种词向量是基于``一个词的上下文只与有限窗口的词有关''这一假设。
-假设这个窗口大小为$W$，第$k$个词的上下文相关词向量$\mathbf{E}_k$
-可以表示为$\mathbf{E}_k = \text{ENC}_k (w_{k-W}, ..., w_{k}, ..., w_{k+W})$。
-通常不同位置的编码器不予区分，所以$\text{ENC}_k = \text{ENC}$。
-
-对于使用双向语言模型的建模上下文相关词向量，第$k$个词对应的
-词向量可以表示为
-\[
-\mathbf{E}_k = \overrightarrow{\text{ENC}}(w_{k-W}, ..., w_k) \oplus \overleftarrow{\text{ENC}}(w_k, ..., w_{k+W})\text{。}
-\]
-
-\subsection{基于语言模型的上下文相关词向量的模型学习}
-
-文献\inlinecite{peters-EtAl:2018:N18-1}以语言模型为学习为学习目标，
-学习编码器的参数。具体来讲，其学习目标为
-\[
-\mathbf{\Theta} =
- \argmin_{\mathbf{\Theta}} 
- \sum_{k=1}^N \log p(w_{k+1} \mid w_1, ..., w_k; \mathbf{\Theta}_{\overrightarrow{\text{ENC}}}) + \log p(w_{k-1} \mid w_k, ..., w_n; \mathbf{\Theta}_{\overleftarrow{\text{ENC}}})\text{。}
-\]
-其中，$\mathbf{\Theta} = \mathbf{\Theta}_{\overrightarrow{\text{ENC}}} \cup \mathbf{\Theta}_{\overleftarrow{\text{ENC}}}$。
-
-\section{基于局部信息的上下文相关词向量模型}[Model]
-
-\yjcomment{LSTM只能记忆优先长度的信息。}
-\yjcomment{能否用context近似LSTM的效果}
-\yjcomment{局部信息对于tagging更重要。}
-
-\subsection{词编码器}[Token-level Encoder]
-
-\subsubsection{词/词片段向量}
-
-一种方法是使用词向量。
-
-\subsubsection{字级别CNN}
-
-另一种方法是使用字级别CNN。
-
-\subsection{上下文编码器}[Context Encoder]
-
-\subsubsection{Bengio03}
-
-文献\inlinecite{NIPS2000_1839}提出的
-语言模型将一定窗口内的向量化的词拼接成一个
-向量并输入多层感知器（MLP）。
-以从左向右的表示为例，$\overrightarrow{\mathbf{E}_k}$可以形式化地表示为
+\subsection{上下文相关词向量}[Contextualized Word Embeddings]
+与上下文无关词向量不同的是，
+上下文相关词向量\cite{NIPS2017_7209,peters-EtAl:2018:N18-1,P18-1031,gpt1,DBLP:journals/corr/abs-1810-04805}
+取消了\textit{一个词有唯一的向量表示}
+的假设，
+从而使模型能够根据上下文动态地决定一个词的词义。
+在这种思路下，一个词的上下文相关词向量$\mathbf{e}_i$
+可以形式化地定义为
 \begin{align}
-\mathbf{c}_k &= \oplus_{i=k-W}^k \mathbf{v}_i \\
-\overrightarrow{\mathbf{E}_k} & = \overrightarrow{\text{MLP}}(\mathbf{c}_k) + \mathbf{c}_k \label{eq:bengio03}
+\mathbf{e}_i = \genericcontextfunc(\wordvec_1, \dots, \wordvec_{n})_i\text{。}
 \end{align}
-对于多层感知器，文献\inlinecite{NIPS2000_1839}
-使用tanh作为中间层的激活函数，
-即$\text{MLP}(\mathbf{x}) = \mathbf{W}^2 \cdot \text{tanh}(\mathbf{W}^1 \cdot \mathbf{x} + \mathbf{b}^1) + \mathbf{b}^2$。
+其中广义向量化函数$\genericcontextfunc$
+将一个输入序列映射到相等长度的输出序列中；
+而$\wordvec_i \in \mathbf{R}^{d}$是第i个词$w_i$的上下文无关的表示。
+通过根据上下文动态地表示一个词，
+这个词的``一词多义''现象能够得到建模。
 
-本文使用高速公路网络（Highway Network，文献\inlinecite{DBLP:journals/corr/SrivastavaGS15}）作为MLP的一种
-替代。具体来讲，
-$
-\text{Highway}(\mathbf{x}) = (1 - g(\mathbf{x}))\cdot \mathbf{x} + g(\mathbf{x})\cdot f(\mathbf{x})\text{。}
-$
-其中，映射函数$f(\mathbf{x})$与MLP相同；
-门函数$g(\mathbf{x}) \in R$，用来表示原始输入向量$\mathbf{x}$在输出向量中的占比。
-公式\ref{eq:bengio03}可以认为是Highway Network的一种特例，即$g(\mathbf{x})$是常数0.5。
-需要指出的是，$g(\mathbf{x})$与$f(\mathbf{x})$类似，都是可学习的函数。
+\subsection{\elmochinesetranslation}[ELMo: Embeddings from Language Modeling]\label{sec:elmo:bg:elmo}
 
-\subsubsection{LBL}
-Minh等人2007年提出的LBL模型\cite{Mnih:2007:TNG:1273496.1273577}
-与Bengio03\cite{NIPS2000_1839}类似，也是一种局部模型。
-不同于Bengio03，LBL采用上下文词向量的加权求和作为
-上下文的表示。
-具体来讲，LBL可以描述为：
-\begin{align*}
-\mathbf{c}_k & = \sum_{i=k-W}^k c_{k-i} \cdot \mathbf{v}_i \text{。} \\
-\overrightarrow{\mathbf{E}_k} & = \overrightarrow{\text{MLP}}(\mathbf{c}_k)\text{。}
-\end{align*}
-其中，$c_{k-i}$是一个距离相关的参数，使得模型可以根据距离
-选择不同的上下文的重要程度。
+Peters等人在文献\inlinecite{peters-EtAl:2018:N18-1}中提出
+通过首先训练双向语言模型然后将语言模型的隐层向量作为上下文相关词向量的
+方法 --- \elmochinesetranslation。
+本文第\ref{sec:intro:review:cont-emb}节已经对于ELMo如何建模语言模型，
+如何建模上下文，
+以及如何学习参数进行了介绍。
+本章在\elmochinesetranslation 的框架下建模本章的上下文相关词向量。
+正如第\ref{sec:intro:review:cont-emb}节讨论的，
+\elmochinesetranslation 主要有两个模块，即：
+\begin{itemize}
+	\item \textit{词表示函数} $\genericwordvecfunc$：
+	词表示函数接受一个词$w_i$并且输出它对应的上下文无关词向量$\wordvec_i$。
+	\item 两个方向的\textit{上下文表示函数} $\genericforwardcontextfunc$、$\genericbackwardcontextfunc$：
+	这两个函数接受一个上下文无关的向量序列，并且输出其上下文相关词向量。
+\end{itemize}
 
-与Bengio03类似，本文在实践中也采用Highway Network取代$\text{MLP}$。
+%给定一个句子$\nwords$，
+%其前向语言模型可以形式化地定义为
+%\[
+%p(w_i \mid w_1, ..., w_{i-1}) = \softmaxfn{w}{W_{w_i} \leftctx_{i-1} + b_{w_i}}\text{。}
+%\]
+%其中$\leftctx_i$是前向上下文表示模型的最终输出。
+%后向语言模型可以采用相同的方式定义。
+%
+%为了建模语言模型并计算$\leftctx_i$，
+%文献\inlinecite{peters-EtAl:2018:N18-1}
+%使用基于字的CNN计算一个词的上下文无关的表示，即$\wordvec_{i} = \text{CNN}(w_{i})$。
+%与此同时，文献\inlinecite{peters-EtAl:2018:N18-1}
+%使用带有短路机制（skip-connections，文献\inlinecite{DBLP:journals/corr/HeZRS15}）
+%的多层LSTM作为前向/后向上下文表示$\genericforwardcontextfunc$与$\genericbackwardcontextfunc$。
+%多层模型可以递归地定义为
+%\[
+%\leftctx_{i}^{(k)} = \genericforwardcontextfunc^{(k)}\left( \leftctx_{1}^{(k-1)}, \dots, \leftctx_{i}^{(k-1)}\right)\text{。}
+%\]
+%根据这一定义，$\leftctx_{i}^{(0)} = \wordvec_{i}$ and $\rightctx_{i}^{(0)} = \wordvec_{i}$。
+%最后，上下文相关词向量可以定义为$L$层隐层状态的加权平均，即
+%\begin{align}\label{eq:elmo:pool}
+%\text{ELMo}_i = \gamma \sum_{k=0}^L s_k \cdot \left(\leftctx_i^{(k)} \oplus \rightctx_i^{(k)}\right).
+%\end{align}
+%
+%文献\inlinecite{peters-EtAl:2018:N18-1}
+%提出通过最大化下一个词的对数似然的方式在大规模生文本中学习语言模型。
+%最终学习目标是两个方向上的对数似然的加和，
+%形式化地定义为：
+%\[
+%\sum_{i=1}^{n} \left( \log p(w_i \mid w_1, \dots, w_{i-1}) +  \log p(w_i \mid w_{i+1}, \dots, w_n) \right)\textit{。}
+%\]
 
-\subsubsection{局部自注意机制}
-LBL使用加权求和的思路表示上下文。
-其中的权重与相对位置相关，与上下文内容无关，并且可以解释为
-对于窗口内词的重要程度的一种度量。
-直觉上讲，这一表示方式允许模型产生``距离越近越重要''
-的表示。
-然而，距离并不是上下文对于一个词的重要程度唯一度量。
-词的内容也应该成为对其重要程度的一种度量。
-基于上述假设，
-本文提出一种基于自局部注意力机制的建模权重的方法。
+\section{基于局部信息的上下文相关词向量模型}[Model]\label{sec:elmo:model}
 
-与LBL类似，本文采用上下文加权求和的方式表示上下文。即
+本章的主要目标是提高上下文相关词向量的训练测试速度。
+根据文献\inlinecite{peters-EtAl:2018:EMNLP}，
+\textit{词表示函数}$\genericwordvecfunc$
+输出的上下文无关词向量可以通过预处理与缓存机制快速计算，
+其效率对于测试速度的影响并不大。
+因而，本章工作的重点在提出新的\textit{上下文表示函数}$\genericforwardcontextfunc$、$\genericbackwardcontextfunc$
+以获得训练测试的加速（\S\ref{sec:elmo:model:context}）。
+但是，提高词表示函数的效率
+能够给训练带来加速，
+从而缩短模型开发周期。
+因此，
+本章也探索了可以给训练带来潜在加速的\textit{词表示函数}（\S\ref{sec:elmo:model:word}）。
+
+对于上下文相关词向量训练的加速问题，
+除了从词表示与上下文表示的角度出发，
+Li等人在2019年的文献\inlinecite{li2019efficient}
+中提出最小化上下文相关词向量与静态词向量距离的训练方式 --- SemFit。
+文献\inlinecite{li2019efficient}使用SemFit替代文献\inlinecite{peters-EtAl:2018:N18-1}
+中的词表级的对数似然，从而获得了训练速度的提升。
+但根据文献\inlinecite{li2019efficient}，这种方法会带来一定的精度损失。
+所以本章仍使用文献\inlinecite{peters-EtAl:2018:N18-1}提出的基于双向语言模型对数似然和的学习目标（公式\ref{eq:intro:elmo:objective}）。
+
+\subsection{词表示函数}[Word Representation]\label{sec:elmo:model:word}
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=\textwidth]{elmo/cnn}
+	\bicaption{}{左图为基于字CNN的词表示模型，右图为基于词片段加和的词表示模型。}
+	{Fig. $\!$}{The left figure is the character CNN model
+		and the right figure is the wordpiece summation model.\label{fig:elmo:word-repr}
+	}
+\end{figure}
+
+\subsubsection{基于字CNN的词表示方法}[character CNN]\label{sec:elmo:model:word:char}
+
+文献\inlinecite{peters-EtAl:2018:N18-1}采用
+Kim在2016年的文献\inlinecite{Kim:2016:CNL:3016100.3016285}中
+提出的基于字CNN的词表示模型（如图\ref{fig:elmo:word-repr}左图所示）。
+基于字CNN的词表示模型通过使用不同宽度的
+卷积函数在字序列方向滑动建模了不同词片段的重要程度。
+当然，在卷积函数数量增加时，基于字CNN的词表示模型的速度会降低。
+
+\subsubsection{基于词片段加和的词表示方法}[Wordpiece Summation]\label{sec:elmo:model:word:wp}
+
+对于建模词片段的问题，
+基于字CNN的方法通过卷积函数自动挖掘词片段
+（对于``重要程度''的建模可以认为是一种对于词片段的挖掘）。
+除了这种自动的方法，
+另一类常见的方法是使用语言学家定义的词片段作为词的一种切分。
+从词到词片段序列的过程叫做词\textit{切片}（tokenization）。
+Luong等人在2013年的文献\inlinecite{luong-socher-manning:2013:CoNLL-2013}
+以及Botha等人在2014年的文献\inlinecite{Botha:2014:CMW:3044805.3045104}
+中分别证明了切片获得的\textit{词片段的向量}（wordpiece embedding）建模词向量
+的有效性。
+为了加速模型学习，本章参考文献\inlinecite{Botha:2014:CMW:3044805.3045104}
+并使用文献\inlinecite{DBLP:journals/corr/abs-1810-04805}
+中的词切片方法首先获得词片段，
+然后通过词片段向量加和的方法计算整个词的表示（如图\ref{fig:elmo:word-repr}右图所示）。
+
+基于词片段加和的方法加速词表示的原因有两方面。
+第一方面是由于词切片的输出是不相交的，
+基于词片段的方法考虑的词片段更少。
+第二方面是由于加和不包含矩阵乘法，
+基于词片段的方法运算得更快。
+但这种表示方法也会相应带来无法建模相交片段，表达能力不足的问题。
+
+\subsection{上下文表示函数}[Context Representation]\label{sec:elmo:model:context}
+
+\paragraph{局部上下文表示}
+
+根据上下文表示模型能够建模的上下文的长度，
+前人工作可以归纳为两类。
+一类是类似LSTM和Transformer的对于完整句子的上下文进行建模的模型。
+另一类是类似CNN的对一个窗口内的上下文进行建模的模型（窗口模型）。
+对于第$i$个词的宽度为$W$的上下文，
+窗口模型可以形式化地定义为：
 \begin{align}
-\mathbf{c}_k & = \sum_{i=k-W}^k a_i  \cdot \mathbf{v}_i  \label{eq:selfatt}\\
-\overrightarrow{\mathbf{E}_k} & = \overrightarrow{\text{Highway}}(\mathbf{c}_k)\text{。}
+\ctx_i = \genericcontextfunc (\wordvec_{1}, \dots, \wordvec_{i}, \dots, \wordvec_{n}) = \genericcontextfunc (\wordvec_{i-W}, \dots, \wordvec_{i}, \dots, \wordvec_{i+W})\text{。}
 \end{align}
-但权重$a_{k-i}$是通过自注意机制\cite{DBLP:journals/corr/BahdanauBXGLPCB16,luong-pham-manning:2015:EMNLP,NIPS2017_7181}计算的。
-形式化地，
-\[
-a_i= \text{softmax}(\frac{(\mathbf{W}^{\text{query}} \mathbf{a}_i)^T \cdot (\mathbf{W}^{\text{key}} \mathbf{a}_k)}{\sqrt{|\mathbf{v}|}})\text{。}
-\]
-其中，$a_i$仅由局部上下文决定，即$k-W \le i \le k$。
-实践中，本文使用多头自注意力机制（Multi-headed Self Attention，文献\inlinecite{NIPS2017_7181}）建模$a_{k-i}$。
+在\elmochinesetranslation 的框架下，
+窗口模型可以定义为：
+\begin{align}
+\ctx_i = \genericforwardcontextfunc (\wordvec_{i-W}, \dots, \wordvec_{i}) \oplus \genericbackwardcontextfunc(\wordvec_{i}, \dots, \wordvec_{i+W})\text{。}
+\end{align}
+需要注意的是，
+当窗口大小足够大时，窗口模型也可以建模完整的句子信息。
 
-如前文所述，
-$a_i$与$c_{k-i}$
-分别从内容本身以及相对距离
-两个维度对于上下文词的重要程度进行了建模。
-为了同时建模词自身表现出的重要程度以及相对距离表现的重要层度，
-本文将公式\ref{eq:selfatt}修改为$\mathbf{c}_k = \sum_{i=k-W}^k (a_i + c_{k-i})  \cdot \mathbf{v}_i$，
-使得上下文表示即关注内容，又关注相对距离。
+Bengio等人在2003年的文献\inlinecite{Bengio:2003:NPL:944919.944966}
+中首次提出使用神经网络建模语言模型。
+同时，文献\inlinecite{Bengio:2003:NPL:944919.944966}
+也是最早在基于神经网络的语言模型中使用窗口模型表示上下文的工作。
+具体来讲，为了表示$w_i$，文献\inlinecite{Bengio:2003:NPL:944919.944966}使用拼接
+窗口内词向量$\wordvec_{i-W}, \dots, \wordvec_i$，并将其输入前馈神经网络（MLP）的方式建模上下文。
+以前向语言模型为例，
+第$i$个词的上文表示$\leftctx_i$可以形式化地描述为：
+\begin{align}
+\leftctx_i = \mlpfn{\wordvec_{i-W} \oplus \dots \oplus \wordvec_{i}}\text{。}
+\end{align}
+根据前馈神经网络的性质，
+文献\inlinecite{Bengio:2003:NPL:944919.944966}可以理解为
+将窗口内的词向量同时按顺序和维度加权求和。
+类似的，后向语言模型输出下文表示$\rightctx_i$
+可以定义为$\rightctx_i = \mlpfn{\wordvec_{i} \oplus \dots \oplus \wordvec_{i+W}}$。
 
-\subsubsection{多层机制}
-Peters等人在文献\inlinecite{peters-EtAl:2018:N18-1,peters-EtAl:2018:EMNLP}
-中强调了对于上下文进行多次抽象的重要性，即多层机制。
-本文提出的上下文模型对应单层情况，但其可以很容易地使用
-多层机制进行拓展。
-下面给出一个两层拓展结合自注意力机制的LBL模型的方法。
-\begin{align*}
-\mathbf{v}_k^{(0)} &= \mathbf{v}_k; &
- \mathbf{c}^{(0)}_k & = \sum_{i=k-W}^k (a_i^{(0)} + c_{k-i}^{(0)}) \cdot \mathbf{v}_k^{(0)}; &
- \mathbf{E}^{(0)} &= \overrightarrow{\text{Highway}^{(0)}}(\mathbf{c}^{(0)}_k)\\
-\mathbf{v}_k^{(1)} & = \mathbf{E}_k^{(0)}; &
- \mathbf{c}^{(1)}_k & = \sum_{i=k-W}^k (a_i^{(1)} + c_{k-i}^{(1)}) \cdot \mathbf{v}_k^{(1)}; &
- \mathbf{E}^{(1)}  &= \overrightarrow{\text{Highway}^{(0)}}(\mathbf{c}^{(1)}_k)\\
-\mathbf{v}_k^{(2)} & = \mathbf{E}_k^{(1)}; &
- \mathbf{c}^{(2)}_k & = \sum_{i=k-W}^k (a_i^{(2)} + c_{k-i}^{(2)}) \cdot \mathbf{v}_k^{(2)}; &
-\mathbf{E}^{(2)}  &= \overrightarrow{\text{Highway}^{(2)}}(\mathbf{c}^{(2)}_k)\text{。}
-\end{align*}
-其中，不同层采用不同的自注意力网络计算$a_t^{j}$。
+Minh等人在2007年的文献\inlinecite{Mnih:2007:TNG:1273496.1273577}
+中发展了文献\inlinecite{Bengio:2003:NPL:944919.944966}的方法并将拼接替换为词向量按照相对距离加权求和。
+对应的第$i$个词的上文表示$\leftctx_i$可以形式化地描述为：
+\begin{align}
+\leftctx_i = \sum_{j=i-W}^{i} c_{i-j} \cdot \wordvec_j\text{。}
+\end{align}
+其中，$c_{i-j}$是一个标量，可以解释为：根据相对距离决定一个窗口内的词$w_j$与目标词$w_i$的相关程度，
+一个词距离目标词越近，相关程度越高。
+类似的，第$i$个词的下文表示$\rightctx_i$可以形式化地描述为
+$\rightctx_i = \sum_{j=i}^{i+W} c_{j-i} \cdot \wordvec_j$。
 
-可以看出，在多层机制中，不同层次使用不同的模型。
-这使得算法可以算法可以从不同的特征角度对上下文进行抽象。
+\paragraph{融合相对位置权重的局部自注意力机制}
 
-\subsection{训练}
+建模一个词与目标词相关程度
+的做法在自注意力机制（self-attention，文献\inlinecite{NIPS2017_7181}）中
+得到进一步发展。
+具体来讲，
+对于一个词$\wordvec_{i}$及其上文词窗口$\wordvec_{i-W}, \dots, \wordvec_{i}$，
+自注意力机制通过公式：
+\begin{align}\label{eq:elmo:selfattn}
+a_{i-j} = \softmaxfn{i-W \le j \le i}{\frac{\wordvec_{i} \cdot \wordvec_{j}^{T}}{\sqrt{d}} }
+\end{align}
+计算$w_i$与窗口内每个词$w_j$的权重。
+其中，$d$是$\wordvec_{i}$的维度。\footnote{
+	文献\inlinecite{NIPS2017_7181}提出一种将$\wordvec_{i}$
+	切分为多个子空间并在子空间上计算自注意力权重的方法，即多头自注意力机制（multi-headed attention）。
+	在多头自注意力机制中，$d$是每个子空间的维度。
+	本章也使用了多头注意力机制，并将``头''数设为16。
+}
+相较文献\inlinecite{Mnih:2007:TNG:1273496.1273577}
+提出的\textbf{相对位置}权重，
+自注意力机制根据一个词与目标词的\textbf{内容}决定其相关程度。
+直观地讲，内容对于两个词的相关程度的判断有重要作用。
+以图\ref{fig:elmo:word-repr}中的句子为例，
+在建模``absurdity''时，``recognized''的相关程度应高于``the''。
+然而，这种方法无法区分不同距离的相同词。
+因此，在自注意力机制中建模距离信息仍是有意义的。
 
-使用sampled softmax\yjcomment{citation}。
+在文献\inlinecite{NIPS2017_7181}中，
+词窗口的范围覆盖整个句子。
+本章旨在通过建模局部信息加速上下文建模，
+因而只在一个有限范围内计算自注意力。
+除了使用自注意力分数作为重要程度的衡量，
+本章也像文献\inlinecite{Mnih:2007:TNG:1273496.1273577}一样
+将相对距离引入模型，使得上下文表示建模了\chtwoassumption。
+本章引入相对距离的方式是将其作为一个额外的未归一化的分数与自注意力分数进行加和，
+得到的上文表示可以形式化地定义为:
+\begin{align}\label{eq:elmo:model:a}
+a_{i-j} = \softmaxfn{i-W \le j \le i}{\frac{\wordvec_{i} \cdot \wordvec_{j}^{T}}{\sqrt{d}} + c_{i-j}}\text{。}
+\end{align}
+类似的，下文表示可以定义为：$a_{j-i} = \softmaxfn{i \le j \le i+W}{\frac{\wordvec_{i} \cdot \wordvec_{j}^{T}}{\sqrt{d}} + c_{j-i}}$。
+在计算获得$a_{i-j}$后，
+第$i$个词的上下文表示可以写作：
+\begin{align}\label{eq:elmo:model:hp}
+\leftctxp_i = \sum_{j=i-W}^{i} a_{i-j} \cdot \wordvec_j\text{。}
+\end{align}
 
-\section{序列标注模型}
+关于位置信息，文献\inlinecite{NIPS2017_7181}
+提出将建模绝对位置的\textit{位置向量}（position embeddings）
+与$\wordvec_i$相加从而使模型捕捉位置信息。
+相较文献\inlinecite{NIPS2017_7181}的方法，
+本章方法只依赖相对位置权重$c$表示位置信息。
+文献\inlinecite{N18-2074}
+提出了一种使用相对位置向量的方法表示相对位置。
+其方法可以形式化地描述为：
+\begin{align}
+a_{i-j} =\softmaxfn{i-W \le j \le i}{\frac{\wordvec_{i} \cdot \wordvec_{j}^{T} + \wordvec_{i} \cdot \mathbf{c}^T_{i-j} }{\sqrt{d}}}\text{。}
+\end{align}
+其中，$\mathbf{c}_{i-j}$是相对位置向量。
+相对于文献\inlinecite{N18-2074}的方法，本章模型对相对位置表示进行了化简。
 
-本文参考文献\inlinecite{ma-hovy:2016:P16-1,lample-EtAl:2016:N16-1}，使用
-当前性能最好的biLSTM-CRF建模序列标注模型。
-具体来讲，biLSTM-CRF将代表句子的词向量序列输入到双向LSTM中，并利用双向LSTM
-的隐层输计算每个词在CRF模型中的发射特征（emission features）的分数。
-具体模型如图\yjcomment{complete me}所示。
+本章参考文献\inlinecite{peters-EtAl:2018:N18-1}
+并将窗口内加权平均的词向量$\leftctxp_i$输入高速公路网络（highway network，文献\inlinecite{DBLP:journals/corr/SrivastavaGS15}）
+从而获得最终的表示$\leftctxpp_i$。
+综上所述，
+本章提出的模型在一层一个窗口内的表示可以形式化地定义为：
+\begin{align}\label{eq:elmo:model:hpp}
+\leftctxpp_i =h(\leftctxp_i) \cdot g(\leftctxp_i) + \leftctxp_i \cdot (1 - g(\leftctxp_i))\text{。}
+\end{align}
+其中，$h(\mathbf{x}) = W_h \mathbf{x} + b_h$是高速公路网络中的映射函数，
+$g(\mathbf{x}) = W_g \mathbf{x} + b_g$是门控函数。
 
-文献\inlinecite{reimers-gurevych:2017:EMNLP2017}对于
-影响biLSTM序列标注模型性能的关键因素进行了详细的研究。
-这些因素包括：1）输入词向量的选取；2）是否使用CRF层；3）LSTM层数；4）LSTM隐层大小；
-5）优化器选取；6）是否使用Dropout。
-根据文献\inlinecite{reimers-gurevych:2017:EMNLP2017}，词向量、CRF、优化器、Dropout
-对于biLSTM序列标注的影响最大。
-可以想见，在固定后三个因素的条件下，序列标注模型的性能可以作为评价词向量好坏的
-标准。
-
-基于文献\inlinecite{reimers-gurevych:2017:EMNLP2017}，
-本文使用CRF\cite{Lafferty:2001:CRF:645530.655813}作为序列标注模型，
-使用Adam算法\cite{DBLP:journals/corr/KingmaB14}优化参数，
-并使用文献\yjcomment{cite gal drop}提出的recurrent dropout技术训练模型参数。
-
-对于输入，
-本文参考文献\inlinecite{peters-EtAl:2018:N18-1}使用上下文相关词向量的方法。
-具体来讲，输入$\mathbf{x} = \sum_i s_i \mathbf{E}_i (\mathbf{x})$。
-
-\section{实验}[Experiments]
-\begin{table}[t]
-		\centering
-	\begin{tabular}{r cccc}
-		\hline
-		数据集 & 标签数 & 训练集 & 开发集 & 测试集 \\
-		\hline
-		组块识别 (CoNLL00) & 15 & 8,936 & 1,844 & 2,012 \\
-		命名实体识别 (CoNLL03) & 9 & 14,041 & 3,250 & 3,453 \\
-		词性标注 (PTB500) & 41 & 500 & 5,527 & 5,462 \\
-		词性标注 (en\_ewt) & 17 & 12,543 & 2,002 & 2,077 \\
-		实体识别 (ACE05) & 15 & 10,052 & 2,421 & 2,050 \\
-		\hline
-	\end{tabular}
-	\caption{数据集信息}\label{tbl:elmo:stats}
-\end{table}
-
-\subsection{设置}
-本文在若干句法相关的序列标注上进行了实验。
-本文关注的任务包括组块识别（CoNLL00\yjcomment{citation}），
-命名实体识别（CoNLL03\yjcomment{citation}），词性标注（PTB\cite{Marcus93buildinga}、en\_ewt）以及
-实体识别（ACE05）。
-这些任务
-统一被统一建模为序列标注问题。
-数据集的统计信息如表\ref{tbl:elmo:stats}
-所示。
-对于PTB数据集，本文参考文献\inlinecite{reimers-gurevych:2017:EMNLP2017}
-中的设置，选用PTB数据集的前500句作为训练数据，以构造数据稀缺的情况。
-
-本文使用CoNLL 2017 shared task\cite{udst:overview2017}提供的生语料作为上下文相关词向量的训练数据。
-这一语料由维基百科与互联网数据（Common Crawl）构成。
-本文从原始数据中按照不同规模进行了采用。
-采用数据的规模分别为10m，20m，50m，100m。
-同时，本文也使用Google 1 billion lm benchmark作为最大规模的生语料。
-这一数据包括近800m的训练数据。
-
-\yjcomment{宽度：4，8，16。}
-\yjcomment{层数：1，2}
-\yjcomment{迭代次数}
-
-\subsection{模型比较}
-\begin{table}[t]
+\paragraph{多层机制}
+\begin{figure}[t]
 	\centering
-	\bicaption{}{使用100M词数据集训练的结果。}{Table$\!$}{}\label{tbl:elmo:res}
-	\begin{tabular}{r cccccc}
-		\hline
-		模型 & CoNLL00 & CoNLL03 & PTB500 & en\_ewt & ACE05 & 平均 \\
-		\hline
-		ELMo & \bf 95.83 & \bf 90.21 & \bf 96.06 & 96.56 & 82.96 &\bf 92.33 \\
-		\hdashline
-		Word2vec & 94.37 & 87.18 & 92.68 & 94.26 & 82.66 & 90.30 \\
-		\hdashline
-		Bengio03 (l=1) & 95.56 & 88.76 & 95.59 & 96.37 & 82.83 & 91.82 \\
-		LBL (l=1)& 95.28 & 89.03 & 95.46 & 96.32 & 83.91 & 92.00 \\
-		SelfAttn (l=1) & 95.26 & 89.03 & 95.51 & 96.34 & 83.35 & 91.90 \\
-		SelfAttn+LBL (l=1) & 95.30 & 89.30 & 95.78 & 96.45 &\bf 84.50 & 92.27 \\
-		SelfAttn+LBL (l=2) & 95.61 & 89.43 & 95.94 &\bf 96.57 & 84.05 & 92.32 \\
-		\hline
-	\end{tabular}
-\end{table}
+	\includegraphics[width=0.6\columnwidth, trim={0 0 16cm 1cm}, clip]{elmo/multilayer}
+	\bicaption{}{本章使用的多层机制}
+	{Fig.~$\!$}{Our model with multi-layer mechanism\label{fig:elmo:multilayer}
+	}
+\end{figure}
 
-本文结果如表\ref{tbl:elmo:res}所示。
-在数据量为100m时，SelfAttn+LBL与ELMo模型性能
-类似。
+本章参考文献\inlinecite{peters-EtAl:2018:EMNLP}使用的多层机制对上下文进行多次抽象（如图\ref{fig:elmo:multilayer}所示）。
+同时，本章层和层之间加入短路机制\cite{DBLP:journals/corr/HeZRS15} ，
+从而减少多层带来的梯度消失问题。
+当定义$\leftctx_i^{(k)}$为第$k$层的第$i$个词的输入时，
+多层机制可以形式化地定义为：
+\begin{align}\arraycolsep=0.8pt\def\arraystretch{1.3}
+\label{eq:elmo:model:skip}
+\begin{array}{rl}
+\leftctxpp_{i}^{(k)} &= \genericforwardcontextfunc^{(k)} \left(\leftctx_{i-L}^{(k-1)}, \dots, \leftctx_{i}^{(k-1)} \right) \\
+\leftctx^{(k)}_i &= \leftctxpp_{i}^{(k)} + \leftctx_i^{(k-1)}\text{。}
+\end{array}
+\end{align}
+其中$k$从0计数，$k=0$代表上下文无关的词向量。
 
-\subsection{分析}
+综合公式\ref{eq:elmo:model:a}到\ref{eq:elmo:model:skip}，
+对于模型的一层，本章提出的融合相对位置权重的局部自注意力机制
+可以表述为：
+\begin{align}\arraycolsep=0.8pt\def\arraystretch{1.3}
+\begin{array}{rl}
+a^{(k)}_{i-j} &= \softmaxfn{i-W \le j \le i}{\frac{\leftctx_{i}^{(k-1)} \cdot \left(\leftctx^{(k-1)}_{j}\right)^{T}}{\sqrt{d}} + c_{i-j}} \\
+\leftctxp^{(k)}_i &= \sum_{j=i-W}^{i} a^{(k)}_{i-j} \cdot \leftctx^{(k-1)}_j \\
+\leftctxpp^{(k)}_i &=h(\leftctxp^{(k)}_i) \cdot g(\leftctxp^{(k)}_i) + \leftctxp^{(k)}_i \cdot (1 - g(\leftctxp^{(k)}_i)) \\
+\leftctx^{(k)}_i &= \leftctxpp_{i}^{(k)} + \leftctx_i^{(k-1)}\text{。}
+\end{array}
+\end{align}
 
-\subsubsection{迭代次数的影响}
+\subsection{实现与模型训练细节}[Implementation and Training Details]
 
-\subsubsection{上下文宽度的影响}
-
-\subsection{最终结果}
 \begin{table}[t]
-	\centering
-	\begin{tabular}{r cccccc}
-		\hline
-		模型 & CoNLL00 & CoNLL03 & PTB500 & en\_ewt & ACE05 & 平均 \\
-		\hline
-		ELMo (small) & 94.81 & 90.13 & 95.92 & 96.04 & 84.93 & 92.36 \\
-		ELMo (medium) & 95.62 & 90.64 & 96.48 & 96.23 & 85.02 & 92.98 \\
-		ELMo (large) & \bf 96.00 & \bf 91.68 & \bf 96.73 & \bf 96.40 & \bf 85.77 & \bf 93.32 \\
-		\hdashline
-		SelfAttn+LBL (l=2) & & & & & & \\
-		\hline
+	\bicaption{}{生语料数据统计}{Table~$\!$}{The statistics of raw data\label{tbl:elmo:raw-stats}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{lcccc}
+		\toprule[1.5pt]
+		数据集 & 句子数 & 小于50词的句子比例 & 词数 & 词表大小 \\
+		\midrule[1pt]
+		enwiki100m & 6.8M & 97.93\% & 100M & 2.8M \\
+		1B word benchmark & 30.6M & 96.62\% & 776.4M & 2.4M \\
+		\bottomrule[1.5pt]
 	\end{tabular}
-	\caption{最终评测结果。}\label{tbl:elmo:final_res}
+\end{table}
+本章在随机采样的10万词英文维基百科数据（enwiki100m）以及1B word benchmark
+上训练本章的上下文相关词向量。
+两个生文本的统计数据如表\ref{tbl:elmo:raw-stats}所示。
+由表\ref{tbl:elmo:raw-stats}可见，
+本章使用的生语料句子的单句词数大部分小于50，
+所以本章将句子按照50的进行了截断。
+
+本章将上下文相关词向量的维度设置为1,024（前向与后向各512维）。
+为了公平比较，本章也将其他基线系统的维度设置为1,024。
+本章根据开发集的实验结果决定模型的层数$L$与窗口宽度$W$。
+如前文所述，本章以双向语言模型的对数似然和（公式\ref{eq:intro:elmo:objective}）为优化目标训练了本章的模型。
+本章使用Adam算法\cite{DBLP:journals/corr/KingmaB14}优化参数，
+并按照文献\inlinecite{NIPS2017_7181}的建议，
+根据公式
+\begin{align}
+\text{rate} = d_{\text{model}}^{0.5} \times \min (\text{step}^{0.5}, \text{step} \times \text{warmup}^{-1.5})
+\end{align}
+调整学习率。\footnote{这种学习率的调整方法亦名``noam''算法，$d_{\text{model}}=512$。}
+
+
+\subsection{上下文相关词向量的性能评价}[Evaluation of Contextualized Embeddings]
+本章参考文献\inlinecite{peters-EtAl:2018:N18-1}\inlinecite{peters-EtAl:2018:EMNLP}以及\inlinecite{DBLP:journals/corr/abs-1810-04805}
+使用两类下游任务 --- 词法-句法任务和语义任务的性能作为上下文相关词向量的性能评价。
+本章按照公式\ref{eq:intro:elmo:pool}
+使用各隐层的加权平均作为每个词的上下文相关词向量。
+对于是否精调（fine-tuning）上下文相关词向量，
+文献\inlinecite{peters-EtAl:2018:N18-1}提出根据开发集性能决定；
+文献\inlinecite{DBLP:journals/corr/abs-1810-04805}则完全使用精调。
+本章的目标与文献\inlinecite{peters-EtAl:2018:EMNLP}最为相似，
+即通过上下文相关词向量的在具体任务中的迁移性能衡量其表达能力，
+因而，在所有实验中，本章将本章提出的以及对比的上下文词向量用作
+固定的词向量，
+只调整公式\ref{eq:intro:elmo:pool}中的$\gamma$与$s_k$。
+
+\section{词法-句法任务评价}[Lexical and Syntactic Evaluation]\label{sec:elmo:syn-eval}
+\begin{table}[t]
+	\bicaption{}{数据集规模信息}{Table~$\!$}{The statistics of corpus\label{tbl:elmo:stats}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{l cccccc}
+		\toprule[1.5pt]
+		数据集 & 标签数 & 训练集 & 开发集 & 测试集 & 平均句子长度 & 	小于50词的比例 \\
+		\midrule[1pt]
+		CoNLL00 & 15 & 8,936 & 1,844 & 2,012 & 23.72 & 98.15\% \\
+		CoNLL03 & 9 & 14,041 & 3,250 & 3,453 & 14.53 & 99.54\% \\
+		PTB500 & 41 & 500 & 5,527 & 5,462 & 23.78 & 98.36\% \\
+		en\_ewt & 17 & 12,543 & 2,002 & 2,077 & 15.33 & 98.54\% \\
+		ACE05 & 15 & 10,052 & 2,421 & 2,050 & 14.52 & 98.86\% \\
+		\bottomrule[1.5pt]
+	\end{tabular}
 \end{table}
 
+\subsection{设置}[Settings]
+\paragraph{数据集与评价指标}
+本章在一系列词法-句法相关的序列标注任务\cite{reimers-gurevych:2017:EMNLP2017}上进行了测试。
+这些任务包含：
+组块分析（CoNLL00，文献\inlinecite{TjongKimSang:2000:ICS:1117601.1117631}）、
+命名实体识别（CoNLL03，文献\inlinecite{TjongKimSang-DeMeulder:2003:CONLL}）、
+资源稀缺词性标注（PTB500，文献\inlinecite{Marcus93buildinga}）、
+实体识别（ACE05）以及
+多风格词性标注（en\_ewt，文献\inlinecite{ud}）。
+本章词法-句法任务评测数据的规模如表\ref{tbl:elmo:stats}所示。
 
-\section{语义任务评价}[Semantic Tasks Evaluations]
+本章关注的组块分析（CoNLL00）、命名实体识别（CoNLL03、ACE05）可以归纳为片段识别问题。
+本章片段识别问题转化为BIO序列标注任务。
+对于词性标注问题，
+本章使用标注准确率评价模型性能。
+对于片段识别问题，
+本章使用去掉无关片段\footnote{通常被标注为O。}
+的片段F1值评价模型性能。
 
+本章也对解码速度进行了比较。
+本章根据文献\inlinecite{peters-EtAl:2018:EMNLP}评估上下文表示（\S\ref{sec:elmo:model:context}）的速度，
+并忽略了词表示（\S\ref{sec:elmo:model:word}）的时间开销。
+本章
+在两种GPU架构 --- NVIDIA P100和NVIDA Titan XP上
+评价了解码速度。
+解码速度采用模型相对ELMo的吞吐比率作为模型速度的评价。\footnote{在这种设置下，ELMo的速度为常为1。}
+最终速度结果是两种GPU架构吞吐率的平均值。
+
+\paragraph{序列标注模型}
+本章使用可调的
+词向量与映射后的固定的词向量拼接构成词表示。
+其中，可调的词向量的维度为100，
+映射后的固定词向量的维度也为100。
+在获得词表示后，本章参考文献\inlinecite{reimers-gurevych:2017:EMNLP2017}
+将其输入包含128维隐含神经元的两层堆叠双向LSTM\cite{ma-hovy:2016:P16-1}
+继续编码上下文，并将得到的
+任务相关的上下文表示输入CRF层从而捕捉标签序列的结构信息。
+
+本章参考文献\inlinecite{reimers-gurevych:2017:EMNLP2017}
+并使用比率为0.33的recurrent dropout机制\cite{Gal:2016:TGA:3157096.3157211}
+训练本章的序列标注模型。
+Adam算法也被用于学习序列标注模型参数。
+根据文献\inlinecite{reimers-gurevych:2017:EMNLP2017}，
+神经网络模型的学习过程是非确定性的，
+且对初始化非常敏感。
+为了控制初始化对模型的影响，
+本章采用5个不同的随机种子进行实验并报告5次实验的结果的平均值和标准差。
+
+\subsection{基线系统}[Baselines]
+本章将本章提出的词向量与不同的词向量进行对比，
+对比的词向量包括：
+\begin{itemize}
+	\item GloVe \cite{pennington-socher-manning:2014:EMNLP2014}：
+	本章使用在8千400亿生语料上训练的
+	300维GloVe词向量作为本章的基线词表示。\footnote{http://nlp.stanford.edu/data/glove.840B.300d.zip}
+	
+	\item Word2vec\cite{NIPS2013_5021}：
+	本章在enwiki100m以及1B word benchmark语料上分别训练Word2vec模型，
+	并将其作为基线系统进行比较。
+	为了与本章的1,024维上下文相关词向量进行公平比较，
+	本章的Word2vec的维度设置为1,024。
+	
+	\item ELMo \cite{peters-EtAl:2018:N18-1}：
+	随着句子长度的增加，
+	LSTM的显存开销会显著增长。
+	分步回传机制（back-propagation through time，BPTT，文献\inlinecite{Elman90findingstructure}）
+	通常被用来克服这一问题。
+	分步回传机制将句子按照时序划分为若干块（chunk），
+	并在训练时将前一块的隐层状态与记忆状态输入下一块，
+	而梯度只在块内进行传播。
+	这一技术的关键是记录LSTM的状态（stateful），
+	文献\inlinecite{peters-EtAl:2018:N18-1}的实现
+	中应用了这一技术。
+	然而，使用局部上下文表示的模型通常不记录状态（unstateful）。
+	为了公平比较，本章在重新训练的ELMo中取消了记录状态的实现方式。
+
+	\item Transformer\cite{peters-EtAl:2018:EMNLP}：
+本章提出的模型使用局部自注意力机制。
+为了与全局自注意力机制进行对比，
+本章将双向Transformer也作为本章基线系统。
+本章的双向Transformer包含3层，
+同时参考文献\inlinecite{DBLP:journals/corr/abs-1810-04805}利用（绝对）位置向量作为输入。
+
+	\item Bengio03\cite{Bengio:2003:NPL:944919.944966}：
+	为了与一系列局部上下文表示模型进行比较，
+	本章也使用文献\inlinecite{Bengio:2003:NPL:944919.944966}
+	提出的基于拼接词向量的表示方法作为基线系统。
+	
+	\item LBL\cite{Mnih:2007:TNG:1273496.1273577}：
+	本章比较的另一个局部上下文表示模型是
+	文献\inlinecite{Mnih:2007:TNG:1273496.1273577}
+	提出的使用词向量按照相对位置加权平均的方法。
+
+	\item GCNN\cite{peters-EtAl:2018:EMNLP}：
+	本章也将本章系统与
+	目前性能最好的局部上下文表示模型 --- GCNN语言模型
+	进行对比。
+	本章GCNN包含各512个宽度为\{1, 2, 4, 8\}的卷积核。
+\end{itemize}
+
+本章的ELMo、Transformer、Bengio03、LBL、GCNN基线模型，
+以及本章模型（标识为SelfAttnLBL）都使用基于字CNN的词表示（\S\ref{sec:elmo:model:word:char}）
+作为上下文无关的词表示输入。
+
+\subsection{结果}[Results]
+\begin{table}[t]
+	\bicaption{}{句法任务实验结果。\textit{ave.}显示的是各任务性能的宏平均，\textit{SPD}显示的是速度。}
+	{Table $\!$}{The results on syntactic problems. The \textit{ave.} column shows the macro-averaged performance. The \textit{SPD}
+		column shows the speed evaluation.\label{tbl:elmo:syn-res}}
+	\vspace{0.5em}\centering\wuhao
+\begin{tabular}{l| ccccc c | c}
+	\toprule[1.5pt]
+	模型 & CoNLL00 & CoNLL03 & PTB500 & en\_ewt & ACE05 & ave. & SPD. \\
+	\midrule[1pt]
+	\multicolumn{8}{l}{GloVe} \\
+	\quad 840B.300d & 94.71 \stdev{0.08} & 89.86 \stdev{0.14} & 94.21 \stdev{0.03} & 95.99 \stdev{0.10} & 83.19 \stdev{0.34} & 91.59 & - \\
+	\multicolumn{8}{l}{official ELMo} \\
+	\quad small & 96.18 \stdev{0.03} & 90.25 \stdev{0.31}& 95.57 \stdev{0.19} & 96.27 \stdev{0.09} & 84.80 \stdev{0.42} & 92.62 & 1.51x \\
+	\quad medium & 96.34 \stdev{0.12} & 90.68 \stdev{0.19} & 95.70 \stdev{0.09}& 96.47 \stdev{0.05} & 84.88 \stdev{0.27} & 92.81 & 1.47x  \\
+	\quad large & 96.36 \stdev{0.08} & 91.30 \stdev{0.14} & 95.68 \stdev{0.22} & 96.59 \stdev{0.08} & 85.59 \stdev{0.21} & 93.11 & 1.26x \\
+	\midrule[0.5pt]
+	\multicolumn{8}{c}{enwiki100m} \\
+	Word2Vec &  94.53 \stdev{0.11} & 87.36 \stdev{0.34} & 94.01 \stdev{0.07} & 95.64 \stdev{0.08} & 82.29 \stdev{0.40} & 90.77 & - \\
+	ELMo & \textbf{96.10} \stdev{0.07} &\textbf{90.21} \stdev{0.24} & 95.60 \stdev{0.17} & \textbf{96.75} \stdev{0.09} & 84.13 \stdev{0.51} & \textbf{92.56} & 1.00x \\
+	LBL & 95.18 \stdev{0.09} & 89.35 \stdev{0.38} & 95.28 \stdev{0.13} & 96.24 \stdev{0.03} & 83.23 \stdev{0.28} & 91.86 & 3.59x \\
+	Bengio03 & 95.39 \stdev{0.09} & 89.19 \stdev{0.20} & 95.51 \stdev{0.11} & 96.51 \stdev{0.07} & 83.67 \stdev{0.49} & 92.05 & 3.25x \\
+	Transformer & 95.61 \stdev{0.09} & 89.39 \stdev{0.23} & 95.41 \stdev{0.31} & 96.35 \stdev{0.11} & 83.32 \stdev{0.26} & 92.01 & \bf 3.96x \\
+	Gated CNN & 95.30 \stdev{0.17} & 89.35 \stdev{0.17} & 95.41 \stdev{0.24} & 96.38 \stdev{0.08} & 83.40 \stdev{0.28} & 91.97 & 3.72x \\
+	SelfAttnLBL & 95.85 \stdev{0.03} & 90.11 \stdev{0.23} & \textbf{95.79} \stdev{0.14} & 96.60 \stdev{0.07} & \textbf{84.24} \stdev{0.26} & 92.52 & 3.15x \\
+	\midrule[0.5pt]
+	\multicolumn{8}{c}{1B word benchmark} \\
+	Word2Vec & 94.71 \stdev{0.12} & 88.71 \stdev{0.41} & 94.44 \stdev{0.06} & 95.71 \stdev{0.09} & 82.51 \stdev{0.32} & 91.22  & -  \\
+	ELMo & \bf 96.40 \stdev{0.05} & \bf 90.83 \stdev{0.25} & 95.59 \stdev{0.16} & 96.53 \stdev{0.06} & \bf 84.84 \stdev{0.20} & \bf 92.84 & 1.00x \\
+	SelfAttnLBL & 96.12 \stdev{0.09} & 90.62 \stdev{0.24} & \bf 95.96 \stdev{0.12} & \bf 96.54 \stdev{0.09} & 84.76 \stdev{0.28} & 92.80 & 3.14x \\
+	\midrule[0.5pt]
+	\multicolumn{8}{c}{Previous SOTA} \\
+	& 文献\inlinecite{akbik-blythe-vollgraf:2018:C18-1} & 文献\inlinecite{peters-EtAl:2018:N18-1} & - & 文献\inlinecite{N18-1089} & 文献\inlinecite{D17-1182} & & \\
+	& 96.72 &  92.22 \stdev{0.10} & - & 95.82 &  83.6 & & \\
+	\bottomrule[1.5pt]
+\end{tabular}
+\end{table}
+
+实验结果如表\ref{tbl:elmo:syn-res}所示。
+表\ref{tbl:elmo:syn-res}的第一组显示的是使用开源
+的上下文无关/相关词向量的序列标注模型的结果。
+第二组显示的是
+使用在enwiki100m上训练的上下文无关/相关词向量的模型的结果。
+第三组显示的是在1B word benchmark上训练词向量对应的结果。\footnote{由于在1B word
+benchmark上训练上下文相关词向量需要过长的时间，
+本章根据表\ref{tbl:elmo:syn-res}中第二组的结果
+只在1B word benchmark上
+比较了本章提出的SelfAttnLBL与ELMo的性能，而忽略了其他基线系统。}
+最后一组显示的是几个数据集上对应的当前最优模型的结果。
+根据第二组和第三组中Word2vec与其他上下文相关词向量的对比，
+使用上下文相关词向量做输入的序列标注模型
+的性能显著好于使用上下文无关词向量的模型。
+这一观察证明了上下文相关词向量的有效性。
+由于这些上下文相关词向量都是基于语言模型的构建的，
+这一结果也间接地验证了文献\inlinecite{peters-EtAl:2018:EMNLP}
+关于语言模型对于学习上下文相关词向量效果的假设。
+
+对于enwiki100m上的实验（表\ref{tbl:elmo:syn-res}第二组），
+本章提出的上下文相关词向量给模型带来了所有基线模型中第二大的提升。
+相较提升最大的ELMo，本章提出的词向量只落后0.04分的平均分。
+对于在1B word benchmark上（表\ref{tbl:elmo:syn-res}第三组），
+本章提出的词向量显示出于enwiki100m相同的趋势。
+与ELMo的差距也是0.04。
+根据最后一列的速度对比，
+在不损失准确性的前提下，本章提出的词向量带来了3倍的速度提升。
+
+通过与其他基于局部上下文表示的词向量（Bengio03、LBL以及GCNN），
+%以及Transformer对比，
+本章提出的方法性能更好，而且速度相当。
+在与Transformer的对比中，
+本章提出的词表示平均高出0.5。
+本章将在后文分析相对Transformer性能提升的主要原因。
+
+在1B word benchmark数据集上训练的词向量
+可以与官方ELMo\cite{peters-EtAl:2018:N18-1}进行
+合理对比。
+相比官方ELMo，
+本章重现的ELMo在评价性能上有0.3个点的差距。
+本章认为这一差距一方面来源于是否使用分步回传机制，
+另一方面在于训练算法的不同。\footnote{官方ELMo使用AdaGrad算法进行训练。}
+相较使用性能相近的中等ELMo模型（表\ref{tbl:elmo:syn-res}中medium行），
+本章的提出的算法运行速度更快。
+
+同时，本章也在表\ref{tbl:elmo:syn-res}中前人最优的结果进行了对比。
+本章提出的词向量在\textit{en\_ewt}、\textit{ACE05}以及\textit{CoNLL00}
+上分别取得了与超越或基本持平前人最优结果的性能。
+这一比较反映了本章提出方法的有效性。
+本章提出的词向量在\textit{CoNLL03}上
+相较当前最优模型差距较大。
+本章认为这一差距是由不同的序列标注方法导致的。
+
+\subsection{分析}[Analysis]\label{sec:elmo:ana}
+
+\subsubsection{超参分析}
+如表\ref{tbl:elmo:syn-res}所示，
+本章提出的词向量取得了与ELMo相近的性能。
+本章同时关注模型中哪些部分
+对词向量表示能力起关键作用。
+如前文所述，本章提出的模型主要包含两种参数：1）窗口大小；
+2）层数。
+在这一章中，本章将研究这些超参对于词向量性能的影响。
+分析这些参数的影响可以从侧面反映出建模局部上下文时的重要因素。
+
+\paragraph{窗口大小的影响}
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=\columnwidth]{elmo/width}
+	\bicaption{}{左图显示两种模型中窗口大小对于模型性能的影响。
+	右图以``感受域''大小为横轴重新绘制了左图结果。}
+	{Fig.~$\!$}{The effect window size. 
+		The x-axis in the right figure is the size of inception field
+		taking multi-layer mechanism into consideration.\label{fig:elmo:ana:width}
+	}
+\end{figure}
+本章首先研究了窗口大小的影响。
+本章在两层和三层SelfAttnLBL模型上
+分别测试了包括2、4、8、16、32在内的5种窗口大小。
+根据表\ref{tbl:elmo:stats}，
+本章关注的大部分词法-句法任务的句子长度都小于50，
+其中3层16宽、2层32宽以及3层32宽都可以对大部分完整句子进行建模。
+开发集上的实验结果如图\ref{fig:elmo:ana:width}左图所示。
+根据图\ref{fig:elmo:ana:width}，
+在两层和三层模型中增大窗口大小到16时可以获得显著的性能提升，
+继续增大到32时产生性能的下降。
+这一结果显示
+对于局部表示模型来讲，
+并非窗口越大越好。
+过大的窗口迫使自注意力网络
+判断更多的上下文的重要程度，
+从而增加模型的学习难度。
+
+由于不同的模型层数与不同窗口大小的组合会导致
+不同的``感受域''大小。\footnote{即在窗口模型中实际可以关注到的输入大小。
+	举例来讲，窗口为4的三层模型的感受域大小为12。}
+本章同时以``感受域''大小为指标
+重新绘制了窗口上述实验。
+其结果显示于图\ref{fig:elmo:ana:width}右图中。
+根据图\ref{fig:elmo:ana:width}右图，
+感受域大小在24到48之间开发集性能较好，
+但三层模型的整体性能较好，
+这说明相对感受域，
+模型性能的作用受到模型复杂程度的影响更大。
+文献\inlinecite{peters-EtAl:2018:EMNLP}
+强调了多层模型在建模上下文相关词向量时的抽象能力。
+文本将上述实验观察归因于多层模型的更强的抽象能力。
+
+同时，这一实验结果表明窗口大小为16的设置具备较好的开发集性能。
+本章以此为基础进行后续分析实验。
+
+\paragraph{层数的影响}
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=0.55\columnwidth]{elmo/layers}
+	\bicaption{}{模型层数对于性能的影响}
+	{Fig.~$\!$}{The effect of number of layers\label{fig:elmo:ana:layers}
+	}
+\end{figure}
+接下来，本章对层数的影响进行了研究。
+根据前文，本章设定窗口大小为16，并研究了1、2、3、4层模型的性能。
+其中实验结果如图\ref{fig:elmo:ana:layers}所示。
+根据这一结果，层数为1的词向量性能显著低于其他层数。
+同时，随着层数增加为4，本章观察到轻微的开发集性能下降。
+出于简化模型的角度考虑，
+本章设定模型层数为3。
+
+\subsubsection{消融实验}[Ablation]
+\paragraph{局部模型于相对位置权重的影响}
+\begin{table}[t]
+	\bicaption{}{消融实验结果}{Table~$\!$}{The ablation results\label{tbl:elmo:ablation}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{cclcc}
+	\toprule[1.5pt]
+	注意力 & 位置 & 模型 & 开发集 & 测试集 \\
+	\midrule[1pt]
+	全局注意力 & 绝对位置 & Transformer & 92.77 & 92.01 \\
+	- & 相对位置 & LBL & 92.57 & 91.86 \\
+	局部注意力& -& SelfAttn & 92.63 & 92.01 \\
+	局部注意力& 绝对位置 & \quad +position embeddings & 92.78 & 92.16 \\
+	局部注意力& 相对位置 & \quad +LBL & \textbf{93.17} & \textbf{92.52} \\
+	\bottomrule[1.5pt]
+\end{tabular}
+\end{table}
+根据表\ref{tbl:elmo:syn-res}，
+本章提出的词向量相对Transformer获得了平均分0.5的性能提升。
+由于本章模型与Transformer的主要差别在于：1）局部自注意力机制；2）建模相对位置。
+为了研究模型性能提升的关键，
+本章在这一节进行了消融实验。
+实验的系统除了LBL、Transformer和SelfAttnLBL，还包括：
+\begin{itemize}
+	\item 只包含局部注意力机制的模型：SelfAttn；
+	\item 包含局部注意力机制与绝对位置向量的模型：SelfAttn+position embeddings。
+\end{itemize}
+这一结果显示在表\ref{tbl:elmo:ablation}中。
+由于
+Transformer与SelfAttn+position embeddings的差别在于建模信息的局部/全局性，
+通过对比表\ref{tbl:elmo:ablation}中对应的行，
+本章认为在上下文相关词向量中
+建模局部信息的可以取得与全局信息相近甚至更好的效果。
+由于
+SelfAttn+LBL与SelfAttn+position embeddings的主要区别在于
+对使用绝对位置向量/相对位置权重，
+通过对比表\ref{tbl:elmo:ablation}中对应的行，
+本章提出的融合相对位置权重的局部自注意力模型取得了明显的性能提升。
+这表明使用相对位置权重的重要性。
+
+综合上述消融实验结果，
+本章提出的SelfAttnLBL带来的性能提升不是
+局部自注意力与相对位置权重性能的简单累加，
+二者通过相互作用达到更好的效果。
+
+\paragraph{输入表示的影响}
+\begin{table}[t]
+	\bicaption{}{不同词表示模型的效果。}{Table $\!$}{The effect of different word representations.\label{tbl:elmo:word-repr}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{lcc}
+		\toprule[1.5pt]
+		模型 & 开发集 & 测试集 \\
+		\midrule[1pt]
+		%ELMo + CNN & 92.56 \\
+		%ELMo + wordpiece sum & 92.24 \\
+		SelfAttnLBL + CNN & \textbf{93.17} & \textbf{92.52} \\
+		SelfAttnLBL + wordpiece sum & 92.87 & 92.00\\
+		\bottomrule[1.5pt]
+	\end{tabular}
+\end{table}
+
+如第\ref{sec:elmo:model:word:wp}节所述，
+本章尝试通过加速词表示获得训练速度的提升。
+在这一节中，
+本章将字级别CNN的词表示替换为本章第\ref{sec:elmo:model:word:wp}
+提出的基于词片段加和进行词表示的模型。
+其实验结果如表\ref{tbl:elmo:word-repr}所示。
+这一结果显示字级别CNN相较词片段表示加和的方式在表示能力上仍有优势。
+本章将这一观察归因为词片段依赖语言学家定义的形态学规则，
+不能建模相交词片段，
+同时片段向量加和的表示能力不足。
+
+\subsubsection{未标注数据规模的影响}[Effect of Unlabeled Data]
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=0.65\columnwidth]{elmo/size_vs_score}
+	\bicaption{}{未标注数据规模对于模型性能影响}
+	{Fig.~$\!$}{The effect of unlabeled data size\label{fig:elmo:ana:size-effect}
+	}
+\end{figure}
+本章分析了未标注数据规模对模型性能的影响。
+本章选取了1、2、5、10、80万为不同的数据规模。
+其中，1、2、5、10万数据是从enwiki100m中采样获得。
+80万数据从1B word benchmark中获得。
+实验结果如图\ref{fig:elmo:ana:size-effect}所示。
+图中包括三种模型：ELMo，两层SelfAttnLBL以及三层SelfAttnLBL。
+图\ref{fig:elmo:ana:size-effect}的结果显示
+随着未标注数据量的增加，上下文相关词向量的表示能力逐步提高。
+这一观察符合预期，
+即使用更多的训练数据能够提高学得的上下文相关词向量的性能。
+
+\subsubsection{语言模型性能与表示能力的关系}
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=\columnwidth]{elmo/ppl_vs_score}
+	\bicaption{}{模型的训练困惑度与下游任务性能之间的关系。
+		左图显示不同语言模型的结果，右图显示两种语言模型不同迭代轮次的结果。}
+	{Fig. $\!$}{The relation between training perplexity and model's performance.
+		The left figure shows the perplexities of different models and
+		the right figure shows the perplexities of one certain model at different iteration.
+		\label{fig:elmo:ana:ppl}
+	}
+\end{figure}
+
+最后，本章分析了语言模型性能与上下文相关词向量表示能力的关系。
+本章以模型训练最后一轮训练集的困惑度（perplexity）作为语言模型性能的评价。
+该结果显示于图\ref{fig:elmo:ana:ppl}中。
+根据图\ref{fig:elmo:ana:ppl}左图，
+困惑度与模型性能呈现出相关性，
+即困惑度越小模型性能越好，但两者相关性并不显著。\footnote{两者的皮尔逊相关系数为-0.7211，p-value>0.1。}
+可见，
+通过网络结构提高语言模型拟合训练数据的能力并不能保证
+提高对应上下文相关词向量的表示能力。
+但根据图\ref{fig:elmo:ana:ppl}右图，
+对于相同的语言模型，
+降低训练的困惑度能够带来性能的提升。\footnote{两条曲线的皮尔逊相关系数为：-0.7801和-0.9633。p-value均小于0.01。}
+
+\section{语义任务评价}[Semantic Evaluation]\label{sec:elmo:sem-eval}
+\begin{table}[t]
+	\bicaption{}{语义任务结果}{Table~$\!$}{The results of semantic evaluation\label{tbl:elmo:sem-eval}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{lcc}
+		\toprule[1.5pt]
+		模型 & 语义角色标注 & 共指消解 \\
+		\midrule[1pt]
+		GloVe & 79.00 \stdev{0.11} & 61.60 \stdev{0.06} \\
+		ELMo & \textbf{82.81} \stdev{0.12} & \textbf{65.67} \stdev{0.27} \\
+		SelfAttnLBL & 82.03 \stdev{0.15} & 65.09 \stdev{0.18} \\
+		\bottomrule[1.5pt]
+	\end{tabular}
+\end{table}
+本章参考文献\inlinecite{peters-EtAl:2018:EMNLP}
+并在两个语义任务 --- 语义角色标注\cite{W13-3516}和共指消解\cite{W12-4501}
+上验证本章提出的上下文相关词向量的有效性。
+下文将对这两个任务及模型进行介绍。
+\subsection{模型}[Models]
+
+\paragraph{语义角色标注} 
+语义角色标注系统要从句子中找出谓词-论元结构。
+谓词-论元结构可以理解为回答句子中的``\textit{谁对谁做了什么，怎么做的}''的问题。
+本章在OntoNotes数据集\cite{W13-3516}上进行了实验，
+使用的语义角色标注模型为He等人在2017年的文献\inlinecite{he-EtAl:2017:Long3}
+提出的基于8层BiLSTM序列标注的语义角色标注模型。
+本章基于AllenNLP \cite{W18-2501}实现了文献\inlinecite{he-EtAl:2017:Long3}中的模型。
+本章使用片段F1值作为语义角色标注的评价指标。
+与句法评测类似，
+本章使用5个不同随机种子做初始化，并报告结果的均值与方差。
+
+\paragraph{共指消解}
+共指消解是将文中提及的实体
+聚类到现实世界实体的任务。
+本章在CoNLL-2012数据集\cite{W12-4501}上进行验证。
+本章采用Lee等人在2017年文献\inlinecite{lee-he-zettlemoyer:2018:N18-2}
+中提出的使用BiLSTM与注意力机制的端到端共指消解模型。
+与语义角色标注类似，
+本章基于AllenNLP实现文献\inlinecite{lee-he-zettlemoyer:2018:N18-2}的模型
+并相应地汇报了5个不同随机种子做初始化的实验结果的均值方差。
+
+\subsection{结果}[Results]
+
+本章对比了使用GloVe做静态词向量以及使用ELMo的模型。
+表\ref{tbl:elmo:sem-eval}显示了本章语义评价的结果。
+根据表\ref{tbl:elmo:sem-eval}，
+相对GloVe的结果，使用上下文相关词向量能够给两个语义任务带来显著的性能提升。
+对比ELMo结果，
+本章模型在语义角色标注上有0.78的差距，
+在共指消解上有0.58的差距。
+可见在语义任务上使用建模全局信息的模型仍有其意义。
+但
+本章提出的模型主要针对需要建模局部信息的句法问题，
+并且相对ELMo有三倍的速度优势，
+可以认为其仍有较大的意义。
 
 \section{本章小结}[Conclusion]
+
+本章针对上下文相关词向量的效率问题，
+根据语言分析主要依赖词窗口的特性，
+提出一种
+融合相对位置权重的局部自注意力机制
+建模上下文相关词向量。
+并在五项句法任务和两项语义任务上验证本章上下文相关词向量的有效性。
+实验结果表明，
+所提出的词向量
+能够在不损失语言分析精度的
+条件下三倍提升模型的解码速度。

@@ -1,75 +1,79 @@
-
-\chapter{基于上下文相关词向量的语言分析}[Syntax Analysis with Contextualized Word Embeddings]\label{chp:seqlabel}
+\chapter{基于上下文相关词向量的句法分析}[Syntactic Analysis with Contextualized Word Embeddings]\label{chp:seqlabel}
 
 \section{引言}[Introduction]
 
-从生文本中有效地学习一直是自然语言处理（NLP）的目标。
-基于上下文相关词向量\cite{peters-EtAl:2018:N18-1}是一种有效的建模
+从生文本中有效地学习一直是自然语言处理的目标。
+上下文相关词向量\cite{NIPS2017_7209,peters-EtAl:2018:N18-1,DBLP:journals/corr/abs-1810-04805,akbik-blythe-vollgraf:2018:C18-1,P18-1031}是一种有效的建模
 生文本的方法。
-它使用双向长短期记忆网络\cite{Hochreiter:1997:LSM:1246443.1246450}
-语言模型来学习原始文本中的上下文信息，并被证明是可以有效地提高
-包括问答、文本蕴含、语义角色标注\cite{peters-EtAl:2018:N18-1}、
-共指消解\cite{lee-he-zettlemoyer:2018:N18-2}、短语结构句法\cite{joshi-peters-hopkins:2018:Long}
-在内的多种NLP任务的准确率\cite{peters-EtAl:2018:EMNLP}。
+它使用（广义）
+语言模型从生文本中学习上下文信息，并被证明是可以有效地提高
+包括问答\cite{peters-EtAl:2018:N18-1,DBLP:journals/corr/abs-1810-04805}、
+语言角色标注\cite{peters-EtAl:2018:N18-1}、
+共指消解\cite{lee-etal-2018-higher}、
+文本蕴含\cite{peters-EtAl:2018:N18-1,DBLP:journals/corr/abs-1810-04805}、
+情感分析\cite{peters-EtAl:2018:N18-1}、
+短语结构句法\cite{P18-1249,joshi-peters-hopkins:2018:Long}
+以及命名实体识别\cite{peters-EtAl:2017:Long,DBLP:journals/corr/abs-1810-04805}
+在内的多种任务的准确率\cite{peters-EtAl:2018:EMNLP}。
 
-尽管ELMo在一部分语义任务上取得了性能的提升，
-但我们对其在语法问题的效果却知之甚少。
-为了分析性能提升的来源，
-理想的测试平台应包含针对特定问题的多个数据集。 
-通过比较ELMo对不同数据集的影响，
-可以揭示改进与数据集内在特征之间的关系，
-从而有助于我们更好地理解ELMo。 
-本文选择多国语通用依存句法（Universal Dependency ，文献\inlinecite{ud}）
+尽管上下文相关词向量帮助一部分语义任务取得了性能的提升，
+但其对句法任务的作用尚不为人知。
+为了分析其能否带来性能提升以及性能提升的来源，
+理想的测试平台应包含相同标注规范下的多个句法分析数据集。 
+比较上下文相关词向量对不同数据集的影响
+可以揭示性能提升与数据集内在特征之间的关系，
+从而更好地理解上下文相关词向量。 
+本章选择多国语通用依存句法分析（Universal Dependency ，文献\inlinecite{ud}）
 作为测试平台。
-本文选择通用依存句法分析的原因是它提供了跨语言一致的句法标注
-以及囊括用于世界上60多种语言，超过100个依存句法树库。
+选择通用依存句法分析的原因是它提供了一种跨语言句法标注规范
+以及60多种语言的超过100个依存句法树库。
 回答上下文相关词向量
 能否提高通用依存句法分析性能并探索这些性能提升的原因
-可以帮助我们更好地理解上下文相关词向量。
+可以有助于更好地理解上下文相关词向量。
 
-本文研究了一种流行的上下文相关词向量---ELMo对通用依存句法分析及其词性标注的影响。
-本文基于Dozat与Manning在2016年的文献\inlinecite{DBLP:journals/corr/DozatM16}
+本章研究了\elmochinesetranslation --- ELMo\cite{peters-EtAl:2018:N18-1}对通用依存句法分析及其词性标注的影响。
+本章基于Dozat与Manning在2016年的文献\inlinecite{DBLP:journals/corr/DozatM16}
 中提出的当前性能最优的
-深度双放射网络（Deep biaffine）构建本文的词性标注器与句法分析器，
-同时使用ELMo作为额外的词向量输入来改进他们的算法。 
-在CoNLL 2018国际通用依存句法分析评测（CoNLL 2018 shared tasks --- Multilingual Parsing from Raw Text to Universal Dependencies，文献\inlinecite{udst:overview}）
-的57个树库的实验结果表明，
-使用ELMo可以给最先进的基线系统带来稳定的提升。
+深度双仿射依存句法分析器（Deep biaffine parser）构建本章的词性标注器与句法分析器。
+同时，本章使用ELMo作为额外的词向量来改进文献\inlinecite{DBLP:journals/corr/DozatM16}的算法。 
+CoNLL 2018国际通用依存句法分析评测（CoNLL 2018 shared tasks --- Multilingual Parsing from Raw Text to Universal Dependencies，文献\inlinecite{udst:overview}）
+的57个树库的实验结果表明：
+使用ELMo可以给当前最优的基线系统带来稳定的提升。
 对于词性标注任务，
 ELMo给57个树库带来平均0.91的提升；
 对于句法分析任务，
 ELMo带来的提升是1.11。
 
 在获得了性能的提升后，
-本文进一步分析其背后的原因。
+本章进一步分析其背后的原因。
 通过研究不同的树库的五种特征及其与性能提升的相关性，
-本文发现ELMo主要通过改进未登录词（Out-of-vocabulary Word，OOV）的表示能力来改进句法分析。
-这种表示能力的改进主要源于ELMo中基于字级别卷积网络的词表示模型。
+本章发现ELMo主要通过改进未登录词（Out-of-vocabulary Word，简称OOV）的表示能力来改进句法分析。
+这种表示能力的改进主要源于ELMo中基于字级别CNN词表示模型。
 对于向量的可视化进一步表明ELMo通过在词向量空间中将相同词性的的
 未登录词聚类在一起来学习更好的未登录词抽象。
 
-基于这些分析，我们进一步将ELMo应用在资源稀缺语言的句法分析中。
-通过模拟实验，ELMo可以在少量标注数据（100句或更少）的情况下显著提高模型性能。
-这一实验显示ELMo乃至上下文相关词向量可能是一种很有前景的技术。
+基于这些分析，
+本章进一步将包括ELMo以及本章第\ref{chp:elmo}章提出的基于局部信息的上下文相关词向量（SelfAttnLBL）在内的上下文相关词向量应用在资源稀缺语言的依存句法分析中。
+通过模拟实验，上下文相关词向量可以在少量标注数据（100句或更少）的情况下显著提高模型性能。
+这一实验显示上下文相关词向量是解决资源稀缺问题的一种很有前景的技术。
 
-本文的主要贡献如下：
+本章的主要贡献如下：
 \begin{itemize}
-	\item 本文在大规模的数据集上验证了ELMo对于通用依存句法分析的效果。
-	ELMo为目前最先进的系统带来了稳定的提升，从而证明了ELMo对于通用
-	依存句法分析的作用。
-	\item 本文对结果进行了详细的分析，
-	并证明性能提升的主要原因是ELMo有
-	更好的未登录词的抽象能力。
-	\item 基于上述分析，本文在资源稀缺的模拟数据中进行了实验。
-	实验证明少量标注数据与ELMo配合就可以获得很好的句法分析性能。
+	\item 本章在大规模数据上验证了ELMo对于通用依存句法分析的效果。
+	实验结果表明，ELMo能够为当前最优的系统带来了稳定的提升（\S\ref{sec:seq:exp}）。
+	\item 本章对上述结果进行了详细的分析（\S\ref{sec:seq:anal}），
+	并证明ELMo带来的性能提升主要源于
+	更好的未登录词的抽象能力（\S\ref{sec:seq:anal:abstration}），
+	而ELMo的基于字的词表示模型对这种抽象能力贡献很大（\S\ref{sec:seq:anal:ablation}）
+	\item 基于上述分析，本章在资源稀缺的模拟数据中进行了实验（\S\ref{sec:seq:anal:low-res}）。
+	实验证明少量标注数据与上下文相关词向量配合可以获得很好的句法分析性能。
 \end{itemize}
 
-
-\section{背景与相关工作}
+\section{背景知识}[Background]
 
 \begin{figure}[t]
 	\centering\wuhao
-	\begin{minipage}{0.45\columnwidth}
+	\begin{minipage}{0.4\columnwidth}
 		\centering
 		\begin{dependency}[edge slant=2, text only label, label style=above]
 			\begin{deptext}
@@ -84,7 +88,7 @@ ELMo带来的提升是1.11。
 			\depedge[edge unit distance=1em]{5}{6}{punct}
 		\end{dependency}
 	\end{minipage}
-	\begin{minipage}{0.54\columnwidth}
+	\begin{minipage}{0.58\columnwidth}
 		\centering
 		\begin{dependency}[edge slant=2, text only label, label style=above]
 			\begin{deptext}
@@ -153,8 +157,8 @@ Liang等人在2008年的文献\inlinecite{liang:icml08}
 改进多个NLP任务。 
 一系列后续工作\cite{P18-1031,joshi-peters-hopkins:2018:Long,peters-EtAl:2018:EMNLP}试图揭示其成功的原因。
 
-本文遵照使用未标注数据提高模型性能的思路开展工作。
-本文首次在多国语上验证ELMo的有效性。
+本章遵照使用未标注数据提高模型性能的思路开展工作。
+本章首次在多国语上验证ELMo的有效性。
 
 \paragraph{上下文相关词向量的分析工作}
 上下文相关词向量在多种任务上的成功促使
@@ -168,14 +172,14 @@ Bowman等人在2018年的文献\inlinecite{DBLP:journals/corr/abs-1812-10860}
 并研究了语言建模之外的潜在获得上下文相关词向量的任务。
 他们发现，在研究过的任务中，语言建模仍然是最优的选择。 
 Zhang等人在2018年的文献\inlinecite{zhang-bowman:2018:BlackboxNLP}中
-进一步在语法分析上展示了语言模型相对翻译的优越性来证实这一点。 
+进一步在句法分析上展示了语言模型相对翻译的优越性来证实这一点。 
 Tenney等人在2018年的文献\inlinecite{tenney2018what}也得到了类似的结论。
 
 \section{深度双仿射句法分析器}[Deep Biaffine Parser]\label{sec:seq:biaffine}
 
-本文的模型基于Dozat和Manning在2016年的文献\inlinecite{DBLP:journals/corr/DozatM16}中
+本章的模型基于Dozat和Manning在2016年的文献\inlinecite{DBLP:journals/corr/DozatM16}中
 提出的\textbf{深度双仿射}句法分析算法（deep biaffine parser）。
-这一算法的核心思想是使用双向长短记忆网络（Bidirectional LSTM，简记为BiLSTM）
+这一算法的核心思想是使用BiLSTM
 为每个单词生成向量表示，
 然后使用该表示来预测词性和依存句法关系。
 
@@ -199,10 +203,10 @@ Tenney等人在2018年的文献\inlinecite{tenney2018what}也得到了类似的�
 	\node[left=2em of R22] (R21) {$\dots$};
 	\node[right=2em of R25] (Y20) {$\dots$};
 	
-	\node[below=0.4cm of RNN] (X1) {$\mathbf{x}_4$};
-	\node[below=0.4cm of RNN2] (X2) {$\mathbf{x}_5$};
-	\node[below=0.4cm of RNN3] (X3) {$\mathbf{x}_6$};
-	\node[below=0.4cm of RNN4] (X4) {$\mathbf{x}_7$};
+	\node[below=0.4cm of RNN] (X1) {$\wordvec_4$};
+	\node[below=0.4cm of RNN2] (X2) {$\wordvec_5$};
+	\node[below=0.4cm of RNN3] (X3) {$\wordvec_6$};
+	\node[below=0.4cm of RNN4] (X4) {$\wordvec_7$};
 	\node[below=0cm of X1] (v1wordsum) {$+$};
 	\draw[draw=none] (R25.north west) -- (R25.north east)
 	node[anchor=north, pos=0.5](pos7hook){};
@@ -214,9 +218,9 @@ Tenney等人在2018年的文献\inlinecite{tenney2018what}也得到了类似的�
 	\node[above=1cm of pos2hook] (pos2) {$\mathbf{t}_4$};
 	\draw[-stealth] (pos2hook) -- node [draw, fill=white, pos=0.5] {MLP} (pos2.south);	
 	
-	\node[below left=0.3cm and 1cm of v1wordsum] (w1) {$\mathbf{w}_4$};
-	\node[below left=0.3cm and 0.cm of v1wordsum] (p1) {$\mathbf{p}_4$};
-	\node[below right=0.3cm and 0.cm of v1wordsum] (vv1) {$\mathbf{\hat{v}}_4$};
+	\node[below left=0.3cm and 1cm of v1wordsum] (w1) {$\wordvec^{(\text{tune})}_4$};
+	\node[below left=0.3cm and 0.cm of v1wordsum] (p1) {$\wordvec^{(\text{fix})}_4$};
+	\node[below right=0.3cm and 0.cm of v1wordsum] (vv1) {$\wordvec^{(\text{char})}_4$};
 	\node[below right=0.3cm and 1cm of v1wordsum, fill=cyan!50] (elmo1) {$\mathbf{ELMo}_4$};
 	
 	\draw[-stealth] (w1.north) -- (v1wordsum.south);
@@ -249,23 +253,23 @@ Tenney等人在2018年的文献\inlinecite{tenney2018what}也得到了类似的�
 	
 	\end{tikzpicture}
 	\bicaption{}{深度双仿射词性标注器的框架。
-	青色的框架表示使用ELMo作为输入。\yjcomment{todo}}{Fig.$\!$}{The framework for deep biaffine tagger.
+	青色的框架表示使用ELMo作为输入。}{Fig. $\!$}{The framework for deep biaffine tagger.
 		In this paper, we use ELMo as an additional word input, as highlighted in the cyan block.
 	\label{fig:seq:pos-frame}}
 \end{figure}
 
 对于词性标注这类单一输入的任务，
 该表示可以形式化地定义为
-\[
-\mathbf{h}_i =  \text{BiLSTM}\left(\mathbf{v}_1^{(word)}, ..., \mathbf{v}_n^{(word)}\right)_i\text{。}
-\]
-其中，$\mathbf{v}_i^{(word)}$是词表示。
+\begin{align}
+\mathbf{h}_i =  \text{BiLSTM}\left(\mathbf{v}_1^{\text{(word)}}, \cdots, \mathbf{v}_n^{\text{(word)}}\right)_i\text{。}
+\end{align}
+其中，$\mathbf{v}_i^{\text{(word)}}$是词表示。
 在获得了隐层表示$\mathbf{h}_i$后，
 其模型依靠如下公式计算第$i$个词被标记为第$j$个词性的分数：
 \begin{align*}
-\mathbf{h}_i^{(pos)} & = \text{MLP}^{(pos)} \left(\mathbf{h}_i\right) \\
-\mathbf{s}_i^{(pos)} & = W \cdot \mathbf{h}_i^{(pos)} + \mathbf{b}^{(pos)} \\
-y_i^{(pos)} & = \argmax_{j} s_{i, j}^{(pos)} 
+\mathbf{h}_i^{\text{(pos)}} & = \text{MLP}^{\text{(pos)}} \left(\mathbf{h}_i\right) \\
+\mathbf{s}_i^{\text{(pos)}} & = \text{MLP}^{\text{(pos')}}( \mathbf{h}_i^{\text{(pos)}} ) \\
+y_i^{\text{(pos)}} & = \argmax_{j} s_{i, j}^{\text{(pos)}}
 \end{align*}
 整个模型的框架如图\ref{fig:seq:pos-frame}所示。
 
@@ -288,10 +292,10 @@ y_i^{(pos)} & = \argmax_{j} s_{i, j}^{(pos)}
 	\node[left=2em of R22] (R21) {$\dots$};
 	\node[right=2em of R25] (Y20) {$\dots$};
 	
-	\node[below=0.4cm of RNN] (X1) {$\mathbf{x}_4$};
-	\node[below=0.4cm of RNN2] (X2) {$\mathbf{x}_5$};
-	\node[below=0.4cm of RNN3] (X3) {$\mathbf{x}_6$};
-	\node[below=0.4cm of RNN4] (X4) {$\mathbf{x}_7$};
+	\node[below=0.4cm of RNN] (X1) {$\wordvec_4$};
+	\node[below=0.4cm of RNN2] (X2) {$\wordvec_5$};
+	\node[below=0.4cm of RNN3] (X3) {$\wordvec_6$};
+	\node[below=0.4cm of RNN4] (X4) {$\wordvec_7$};
 	
 	\draw[draw=none] (R25.north west) -- (R25.north east)
 	node[anchor=north, pos=0.2](arcdep7s){} 
@@ -299,10 +303,10 @@ y_i^{(pos)} & = \argmax_{j} s_{i, j}^{(pos)}
 	node[anchor=north, pos=0.6](reldep7s){} 
 	node[anchor=north, pos=0.8](relhead7s){};
 	
-	\node[above=of arcdep7s] (arcdep5) {$\mathbf{h}_7^{(a-d)}$};
-	\node[above=1.5cm of archead7s] (archead5) {$\mathbf{h}_7^{(a-h)}$};
-	\node[above=2.0cm of reldep7s] (reldep5) {$\mathbf{h}_7^{(r-d)}$};
-	\node[above=2.5cm of relhead7s] (relhead5) {$\mathbf{h}_7^{(r-h)}$};
+	\node[above=of arcdep7s] (arcdep5) {$\mathbf{h}_7^{\text{(a-d)}}$};
+	\node[above=1.5cm of archead7s] (archead5) {$\mathbf{h}_7^{\text{(a-h)}}$};
+	\node[above=2.0cm of reldep7s] (reldep5) {$\mathbf{h}_7^{\text{(r-d)}}$};
+	\node[above=2.5cm of relhead7s] (relhead5) {$\mathbf{h}_7^{\text{(r-h)}}$};
 	
 	\draw[-stealth] (arcdep7s) -- (arcdep5.south);
 	\draw[-stealth] (archead7s) -- (archead5.south);
@@ -315,10 +319,10 @@ y_i^{(pos)} & = \argmax_{j} s_{i, j}^{(pos)}
 	node[anchor=north, pos=0.6](arcdep2s){}
 	node[anchor=north, pos=0.8](archead2s){};
 	
-	\node[above=2.0cm of relhead2s] (relhead2) {$\mathbf{h}_4^{(r-h)}$};
-	\node[above=1.0cm of archead2s] (archead2) {$\mathbf{h}_4^{(a-h)}$};
-	\node[above=2.5cm of reldep2s] (reldep2) {$\mathbf{h}_4^{(r-d)}$};
-	\node[above=1.5of arcdep2s] (arcdep2) {$\mathbf{h}_4^{(a-d)}$};
+	\node[above=2.0cm of relhead2s] (relhead2) {$\mathbf{h}_4^{\text{(r-h)}}$};
+	\node[above=1.0cm of archead2s] (archead2) {$\mathbf{h}_4^{\text{(a-h)}}$};
+	\node[above=2.5cm of reldep2s] (reldep2) {$\mathbf{h}_4^{\text{(r-d)}}$};
+	\node[above=1.5of arcdep2s] (arcdep2) {$\mathbf{h}_4^{\text{(a-d)}}$};
 	
 	\draw[-stealth] (archead2s) -- node [draw, fill=white, pos=0.6] {MLP} (archead2.south);
 	\draw[-stealth] (arcdep2s) -- node [draw, fill=white, pos=0.6] {MLP}  (arcdep2.south);
@@ -327,12 +331,12 @@ y_i^{(pos)} & = \argmax_{j} s_{i, j}^{(pos)}
 	
 	\node[below=0cm of X1] (v1sum) {$\oplus$};
 	\node[right=0.4cm of v1sum] (v1tag) {$\mathbf{v}_4^{(tag)}$};
-	\node[left=0.4cm of v1sum] (v1word) {$\mathbf{v}_4^{(word)}$};
+	\node[left=0.4cm of v1sum] (v1word) {$\mathbf{v}_4^{\text{(word)}}$};
 	
 	\node[left=0.2cm of v1word] (v1wordsum) {$+$};
-	\node[above left=1cm and 0.5cm of v1wordsum] (w1) {$\mathbf{w}_4$};
-	\node[above left=0.5cm and 0.5cm of v1wordsum] (p1) {$\mathbf{p}_4$};
-	\node[below left=-1.0cm and 0.5cm of v1wordsum] (vv1) {$\mathbf{\hat{v}}_4$};
+	\node[above left=1cm and 0.5cm of v1wordsum] (w1) {$\wordvec^{\text{(tune)}}_4$};
+	\node[above left=0.5cm and 0.5cm of v1wordsum] (p1) {$\wordvec^{\text{(fix)}}_4$};
+	\node[below left=-1.0cm and 0.5cm of v1wordsum] (vv1) {$\wordvec^{\text{(char)}}_4$};
 	\node[below left=-0.5cm and 0.5cm of v1wordsum, fill=cyan!50] (elmo1) {$\mathbf{ELMo}_4$};
 	
 	\draw[-stealth] (v1tag.west) -- (v1sum.east);
@@ -364,8 +368,8 @@ y_i^{(pos)} & = \argmax_{j} s_{i, j}^{(pos)}
 	\node[right=2.3cm of arcdep2, draw, minimum height=0.5cm] (b1) {biaffine};
 	\node[left=0.5cm of relhead5, draw, minimum height=0.5cm] (b2) {biaffine};
 	
-	\node[above=1.5cm of b1] (s1) {$s_{4, 7}^{(arc)}$};
-	\node[above=0.5cm of b2] (s2) {$s_{4, 7}^{(rel)}$};
+	\node[above=1.5cm of b1] (s1) {$s_{4, 7}^{\text{(arc)}}$};
+	\node[above=0.5cm of b2] (s2) {$s_{4, 7}^{\text{(rel)}}$};
 	
 	\draw[-stealth] (arcdep2.east) -- (b1.west);
 	\draw[-stealth] (archead5.west) -- (b1.east);
@@ -383,8 +387,9 @@ y_i^{(pos)} & = \argmax_{j} s_{i, j}^{(pos)}
 	
 	\end{tikzpicture}
 	\bicaption{}{深度双仿射依存句法分析器的框架。
-		青色的框架表示使用ELMo作为输入。\yjcomment{todo}}{Fig.$\!$}{The framework for deep biaffine parser.
-		We demonstrate how to calculate the arc score ($s_{4,7}^{(arc)}$) and relation score ($s_{4,7}^{(rel)}$) between the fourth
+		青色的框架表示使用ELMo作为输入。该图显示了如何计算第四个词修饰第七个词的分数。}
+	{Fig. $\!$}{The framework for deep biaffine parser.
+		We demonstrate how to calculate the arc score ($s_{4,7}^{\text{(arc)}}$) and relation score ($s_{4,7}^{\text{(rel)}}$) between the fourth
 		and seventh words.
 		Like in Figure \ref{fig:seq:pos-frame}, we highlight the additional ELMo embeddings in the cyan block.
 		\label{fig:seq:dep-frame}}
@@ -396,31 +401,31 @@ y_i^{(pos)} & = \argmax_{j} s_{i, j}^{(pos)}
 两种表示进行拼接，然后输入BiLSTM模型中。
 这一过程可以形式化地描述如下：
 \begin{align}
-\mathbf{x}_i & =  \mathbf{v}_i^{(word)} \oplus \mathbf{v}_i^{(tag)} \label{eq:xi}\\
-\mathbf{h}_i & =  \text{BiLSTM}\left(\mathbf{x}_1, ..., \mathbf{x}_n\right)_i\text{。}\label{eq:hi}
+\wordvec_i & =  \mathbf{v}_i^{\text{\text{(word)}}} \oplus \mathbf{v}_i^{\text{(tag)}} \label{eq:seq:xi}\\
+\mathbf{h}_i & =  \text{BiLSTM}\left(\wordvec_1, \cdots, \wordvec_n\right)_i\text{。}\label{eq:seq:hi}
 \end{align}
 
 在获得了$\mathbf{h}_i$后，深度双仿射句法分析算法将一对词的表示
 输入到一个深度双仿射网络中，以求得这对词构成修饰关系的可能性。
 形式化地，第$i$个词修饰句子中其他词的概率可以使用如下方法进行计算
 \begin{align*}
-\mathbf{s}_i^{(arc)} & = H^{(arc\text{-}head)} W^{(arc)} \mathbf{h}_i^{(arc\text{-}dep)} + H^{(arc\text{-}head)} \mathbf{b}^{(arc)} \\
-y^{(arc)} & = \argmax_{j} s_{i, j}^{(arc)}\text{。}
+\mathbf{s}_i^{\text{\text{(arc)}}} & = H^{\text{(arc-head)}} W^{\text{\text{(arc)}}} \mathbf{h}_i^{\text{(arc-dep)}} + H^{\text{(arc-head)}} \mathbf{b}^{\text{\text{(arc)}}} \\
+y^{\text{\text{(arc)}}} & = \argmax_{j} s_{i, j}^{\text{\text{(arc)}}}\text{。}
 \end{align*}
 其中，
-$\mathbf{h}_i^{(arc\text{-}dep)}$表示第$i$个词做修饰词时的向量表示。
-$\mathbf{h}_i^{(arc\text{-}dep)}$可以通过将$\mathbf{h}_i$输入MLP计算获得。
-与之类似，$\mathbf{h}_i^{(arc\text{-}head)}$代表表示第$i$个词做核心词时的向量表示。
-$H^{(arc\text{-}head)}$是将$\mathbf{h}_i^{(arc\text{-}head)}$沿
+$\mathbf{h}_i^{\text{(arc-dep)}}$表示第$i$个词做修饰词时的向量表示。
+$\mathbf{h}_i^{\text{(arc-dep)}}$可以通过将$\mathbf{h}_i$输入MLP计算获得。
+与之类似，$\mathbf{h}_i^{\text{(arc-head)}}$代表表示第$i$个词做核心词时的向量表示。
+$H^{\text{(arc-head)}}$是将$\mathbf{h}_i^{\text{(arc-head)}}$沿
 词序列方向堆叠获得的矩阵。
-在求得了每个词的核心词$y^{(arc)}$后，
+在求得了每个词的核心词$y^{\text{(arc)}}$后，
 深度双仿射句法分析算法对每条弧依据如下公式进行分类，
 \begin{align*}
-\mathbf{s}_i^{(rel)} & = \left(\mathbf{h}^{(rel-head)}_{y^{(arc)}}\right)^T \mathbf{U}^{(rel)} \mathbf{h}_i^{(rel-dep)}  + W^{(rel)} \left(\mathbf{h}_i^{(rel-dep)} \oplus \mathbf{h}^{(rel-head)}_{y^{(arc)}}\right) + \mathbf{b}^{(rel)}, \\
-y^{(rel)} & = \argmax_{j} s_{i, j}^{(rel)}\text{。}
+\mathbf{s}_i^{\text{(rel)}} & = \left(\mathbf{h}^{\text{(rel-head)}}_{y^{\text{(arc)}}}\right)^T \mathbf{U}^{\text{(rel)}} \mathbf{h}_i^{\text{(rel-dep)}}  + W^{\text{(rel)}} \left(\mathbf{h}_i^{\text{(rel-dep)}} \oplus \mathbf{h}^{\text{(rel-head)}}_{y^{\text{(arc)}}}\right) + \mathbf{b}^{\text{(rel)}}, \\
+y^{\text{(rel)}} & = \argmax_{j} s_{i, j}^{\text{(rel)}}\text{。}
 \end{align*}
-其中，$\mathbf{h}^{(rel-head)}$与$\mathbf{h}^{(rel-dep)}$
-的计算过程与$\mathbf{h}_i^{(arc\text{-}dep)}$和$\mathbf{h}_i^{(arc\text{-}head)}$相仿。
+其中，$\mathbf{h}^{\text{(rel-head)}}$与$\mathbf{h}^{\text{(rel-dep)}}$
+的计算过程与$\mathbf{h}_i^{\text{(arc-dep)}}$和$\mathbf{h}_i^{\text{(arc-head)}}$相仿。
 整体的框架如图\ref{fig:seq:dep-frame}所示。
 
 在深度双仿射句法分析算法中，由于每个词对应的核心词是
@@ -431,17 +436,18 @@ y^{(rel)} & = \argmax_{j} s_{i, j}^{(rel)}\text{。}
 
 \paragraph{输入表示}
 在深度双仿射句法分析算法中，
-最终的词向量$\mathbf{v}_i^{(word)}$由三部分组成：
-1）一个可更新的词向量$\mathbf{w}_i$；2）一个固定的来自预训练的词向量$\mathbf{p}_i$，以及3）一个使用字级别LSTM
-编码的向量$\mathbf{\hat{v}}_i$。
+最终的词向量$\mathbf{v}_i^{\text{(word)}}$由三部分组成：
+1）一个可更新的词向量$\wordvec^{\text{(tune)}}_i$；
+2）一个固定的来自预训练的词向量$\wordvec^{\text{(fix)}}_i$，
+以及3）一个使用字级别LSTM编码的向量$\wordvec^{\text{(char)}}_i$。
 最终的词向量由三种表示如下式加和求得
 \begin{align}\label{eq:seq:word}
-\mathbf{v}_i^{(word)} = \mathbf{w}_i + \mathbf{p}_i + \mathbf{\hat{v}}_i.
+\mathbf{v}_i^{\text{(word)}} = \wordvec^{\text{(tune)}}_i + \wordvec^{\text{(fix)}}_i + \wordvec^{\text{(char)}}_i\text{。}
 \end{align}
 根据Dozat等人2017年的文献\inlinecite{dozat-qi-manning:2017:K17-3}，
-可调的词向量$\mathbf{w}_i$可以学习常见词的表示；
-固定的词向量$\mathbf{p}_i$可以学习从未标注数据中无监督地学习；
-基于字的LSTM的词向量$\mathbf{\hat{v}}_i$编码了词的形态学特征。
+可调的词向量$\wordvec^{\text{(tune)}}_i $可以学习常见词的表示；
+固定的词向量$\wordvec^{\text{(fix)}}_i$可以学习从未标注数据中无监督地学习；
+基于字的LSTM的词向量$\wordvec^{\text{(char)}}_i$编码了词的形态学特征。
 而使用加和的方式表示特征借鉴了Residual Network \cite{DBLP:journals/corr/HeZRS15}
 的思想。
 
@@ -450,68 +456,38 @@ y^{(rel)} & = \argmax_{j} s_{i, j}^{(rel)}\text{。}
 %DensetNet \cite{DBLP:journals/corr/HuangLW16a}在图像分类领域中发展了特征拼接的技术，
 %并取得了与Residual Network类似的性能。
 
-\section{基于深度上下文相关词向量的输入表示}[Deep Contextualized Word Embeddings]
+\section{基于上下文相关词向量的深度双仿射句法分析器}[Biaffine Parser with Contextualized Word Embeddings]
 
-上下文相关词向量\cite{peters-EtAl:2018:N18-1,DBLP:journals/corr/abs-1810-04805}
+上下文相关词向量\cite{NIPS2017_7209,peters-EtAl:2018:N18-1,P18-1031,gpt1,DBLP:journals/corr/abs-1810-04805}
 在多项句法语义任务中表现出很好的性能。
 Peters等人在2018年的文献\cite{peters-EtAl:2018:N18-1}
-中提出学习\textit{双向语言模型}并使用分类前的隐层状态用作下游任务的表示。
-给定一个句子$\nwords$
-及其上下文无关的词向量$\nwordvecs$，
-其中正向语言模型的概率可以表示为
-\[
-p(w_i \mid w_1, ..., w_{i-1}) = \frac{1}{Z}\exp\left(W_{w_i} \leftctx_{i-1} + b_{w_i}\right)\text{。}
-\]
-其中$\leftctx_{i}$是正向上下文表示模型$\elmoleftctxfn$在第$i$个位置的输出，
-$Z = \sum_w \exp\left(W_w \leftctx_{i-1} + b_w\right)$是归一化因子。
-反向语言模型采用相同的方法定义。
-
-Peters等人在文献\inlinecite{peters-EtAl:2018:N18-1}中
-使用字级别CNN作为词的上下文无关的表示，即$\tilde{\mathbf{v}}_i = \text{CNN}(w_i)$。
-通过使用字级别模型，ELMo可以给任意词以合理的上下文无关表示，
-从而从一定程度上缓解未登录词问题。
-根据后文，这一能力能够显著帮助通用依存句法分析取得性能的提升。
-文献\inlinecite{peters-EtAl:2018:N18-1}同时使用带有短路机制（skip connections）的多层LSTM建模
-$\elmoleftctxfn$与$\elmorightctxfn$。
-多层机制可以递归地定义为
-\[
-\leftctx_{i}^{(k)} = \elmoleftctxfn^{(k)}\left( \leftctx_{1}^{(k-1)}, ..., \leftctx_{i}^{(k-1)}\right)\text{。}
-\]
-其中，$k$代表第从0开始计数的层数，而$\leftctx_{i}^{(0)} = \bigv_{i}$，$\rightctx_{i}^{(0)} = \bigv_{i}$。
-最终，文献\cite{peters-EtAl:2018:N18-1}通过对$L+1$层的隐层加权平均
-$\mathbf{ELMo}_i = \gamma \sum_{k=0}^L s_k \cdot \left(\leftctx_i^{(k)} \oplus \rightctx_i^{(k)}\right)$
-作为它的上下文相关词向量$\mathbf{ELMo}_i$。
-上式中，$L$是层数，$s_k$是各层的权重，而$\gamma$是一个与任务相关的控制向量长度的参数。
-
-文献\inlinecite{peters-EtAl:2018:N18-1}通过以预测下一个词为目标学习在大规模未标注数据上学习模型参数。
-双向语言模型的学习目标可以定义为：
-\[
-\sum_{i=1}^{n} \left( \log p(w_i \mid w_1, ..., w_{i-1}) \right.
-+ \left. \log p(w_i \mid w_{i+1}, ..., w_n) \right)\text{。}
-\]
+中提出\elmochinesetranslation --- ELMo。
+本文已经在第\ref{sec:intro:review:cont-emb}节中对于ELMo的上下文表示以及模型学习
+进行了详细的介绍。
+本章在这里按照公式\ref{eq:intro:elmo:pool}获得上下文相关词向量$\text{ELMo}_i = \gamma \sum_{k=0}^L s_k \cdot \left(\leftctx_i^{(k)} \oplus \rightctx_i^{(k)}\right)$。
 
 \paragraph{在深度双仿射句法分析器中使用ELMo}
-本文关注的问题是ELMo在通用依存句法分析中的效果。
-本文将ELMo用作一种额外的词向量输入模型中。
+本章关注的问题是ELMo在通用依存句法分析中的效果。
+本章将ELMo用作一种额外的词向量输入模型中。
 
 文献\inlinecite{DBLP:journals/corr/abs-1903-05987}在多个任务上研究了
 在使用上下文相关词向量时是否需要调整词向量参数的问题。
 根据其结论，在将上下文相关词向量应用于有丰富的任务相关参数的模型时
 固定参数可以获得更好的效果。
-由于本文使用的深度双仿射句法分析器包含丰富的参数，
-本文参考文献\inlinecite{DBLP:journals/corr/abs-1903-05987}
+由于本章使用的深度双仿射句法分析器包含丰富的参数，
+本章参考文献\inlinecite{DBLP:journals/corr/abs-1903-05987}
 并在训练模型中固定参数。
 
 在获得$\mathbf{ELMo}_i$之后，
-本文将其用作一个额外的词向量。
+本章将其用作一个额外的词向量。
 正如在第\ref{sec:seq:biaffine}节中所示，
 文献\inlinecite{dozat-qi-manning:2017:K17-3}
 通过相加将不同的词特征进行组合并获得词表示（如公式\ref{eq:seq:word}所示）。
-本文参考其做法并将$\mathbf{ELMo}_i$映射到与$\mathbf{v}^{(word)}$
+本章参考其做法并将$\mathbf{ELMo}_i$映射到与$\mathbf{v}^{\text{(word)}}$
 相同的维度并通过相加与其他特征进行组合。
-因此，对于词性标注与句法分析器（参考图\ref{fig:seq:pos-frame}与图\ref{fig:seq:dep-frame}中青色的部分），$\mathbf{v}_i^{(word)}$等于
-\begin{equation}\label{eq:final_word_rep}
-\mathbf{v}_i^{(word)} = \mathbf{w}_i + \mathbf{p}_i + \mathbf{\hat{v}}_i + W^{(ELMo)} \cdot \mathbf{ELMo}_i
+因此，对于词性标注与句法分析器（参考图\ref{fig:seq:pos-frame}与图\ref{fig:seq:dep-frame}中青色的部分），$\mathbf{v}_i^{\text{(word)}}$等于
+\begin{equation}\label{eq:seq:final_word_rep}
+\mathbf{v}_i^{\text{(word)}} = \wordvec^{\text{(tune)}}_i  + \wordvec^{\text{(fix)}}_i + \wordvec^{\text{(char)}}_i + W^{\text{(ELMo)}} \cdot \mathbf{ELMo}_i
 \end{equation}
 
 文献\inlinecite{peters-EtAl:2018:N18-1}
@@ -519,77 +495,53 @@ $\mathbf{ELMo}_i = \gamma \sum_{k=0}^L s_k \cdot \left(\leftctx_i^{(k)} \oplus \
 一种是将其与传统词向量进行组合，另一种是与隐层进行组合。
 根据文献\inlinecite{peters-EtAl:2018:N18-1}，
 复杂的组合方法带来了少量性能的提升。
-然而，由于本文的目标是研究上下文相关词向量与通用依存分析的关系，
-本文只使用将上下文相关词向量与传统词向量进行组合的方式
+然而，由于本章的目标是研究上下文相关词向量与通用依存分析的关系，
+本章只使用将上下文相关词向量与传统词向量进行组合的方式
 在深度双仿射句法分析器中使用ELMo。
 
-%\cite{peters-EtAl:2018:N18-1}使用字级别CNN建模词。
-%Optimal parameters of BiLSTM and
-%CNN are achieved through training the forward LSTM to predict
-%next word on the unlabeled data
-%and training the backward LSTM to predict the previous one.
-%In our paper, we follow \citet{N18-1202} and use a two-layer bidirectional LSTM as our $\text{BiLSTM}^{(LM)}$.
-%
-%为了研究上下文相关词向量对分词、词性标注以及句法分析的
-%影响，本文将ELMo作为一种\textit{输入表示}加入深度双仿射依存句法分析算法。
-%与文献\inlinecite{peters-EtAl:2018:N18-1}不同的是，本文将ELMo视作一种固定输入。
-%更进一步，本文将文献\inlinecite{peters-EtAl:2018:N18-1}中的加权平均简化为
-%简单平均。即设置公式\ref{eq:seq:orig-elmo-usage}中的$s_j$与$\gamma$为1，
-%从而获得如下上下文相关词向量
-%\[
-%\mathbf{ELMo}_i = \sum_{j=0}^{2} \mathbf{h}_{i, j}^{(LM)}\text{。}
-%\]
-%
-%在前期实验中，本文发现
-%In our preliminary experiments, using $ \mathbf{h}_{i, 0}^{(LM)}$ for $\mathbf{ELMo}_i$
-%yields better performance on some treebanks.
-%In our experiments, we decide using either $\sum_{j=0}^{2} \mathbf{h}_{i, j}^{(LM)}$
-%or $ \mathbf{h}_{i, 0}^{(LM)}$ based on their development performance.
+\section{实验}[Experiments]\label{sec:seq:exp}
 
-\section{实验}[Experiments]
-
-\subsection{实验设置}[Settings]
-本文在CoNLL 2018多国语句法分析评测\cite{udst:overview}中的57个数据集上进行实验。
+\subsection{设置}[Settings]\label{sec:seq:exp:settings}
+本章在CoNLL 2018多国语句法分析评测\cite{udst:overview}中的57个数据集上进行实验。
 这些实验包括通用词性标注和通用依存句法分析。
 这57个数据集涵盖44种不同语系的语言。
-本文选择这些数据集的原因是每个数据集对应的语言都有与之配套的生语料。
-本文采用标准方法将数据集划分为训练集、开发集和测试集。
-为了训练ELMo，本文从评测公开的生语料中为每种语言随机抽取了两千万词的生语料。
+本章选择这些数据集的原因是每个数据集对应的语言都有与之配套的生语料。
+本章采用标准方法将数据集划分为训练集、开发集和测试集。
+为了训练ELMo，本章从评测公开的生语料中为每种语言随机抽取了两千万词的生语料。
 
-对于通用词性标注实验，本文使用正确的分词结果作为输入。
+对于通用词性标注实验，本章使用正确的分词结果作为输入。
 评测任务为词性标注提供了通用词性标签（UPOS）与每个树库特有的词性标签（XPOS）。
-本文参考文献\inlinecite{dozat-qi-manning:2017:K17-3}
-并使用UPOS与XPOS联合学习的方法训练本文的词性标注器。
+本章参考文献\inlinecite{dozat-qi-manning:2017:K17-3}
+并使用UPOS与XPOS联合学习的方法训练本章的词性标注器。
 具体来讲，联合学习的目标是在使用共享的的句子表示的同时正确预测UPOS和XPOS。
-本文词级别词性标注准确率作为本文的评价指标。
+本章词级别词性标注准确率作为本章的评价指标。
 由于某些数据集的XPOS无意义\footnote{例如Japanese-GSD只提供了UPOS标注，XPOS全部为占位符。}，文本只报告UPOS结果。
 初步实验结果显示了UPOS和XPOS的类似趋势，故报告UPOS结果具有足够的代表性。
 
-对于通用依存句法分析实验，与词性标注类似，本文也使用正确的分词结果作为输入。
-为了使训练过程与测试过程相近，本文使用自动词性标注作为输入。
-为了获得训练数据上的自动词性，本文在词性标注实验中的词性标注器的基础上，
+对于通用依存句法分析实验，与词性标注类似，本章也使用正确的分词结果作为输入。
+为了使训练过程与测试过程相近，本章使用自动词性标注作为输入。
+为了获得训练数据上的自动词性，本章在词性标注实验中的词性标注器的基础上，
 利用5折交叉方法给整个训练集标注了自动词性。
-本文使用带标签依存关系准确率（LAS）评估通用依赖性分析性能。
+本章使用带标签依存关系准确率（LAS）评估通用依赖性分析性能。
 
 训练ELMo的一个困难之处在于：当词表较大，softmax输出层的维度过高。
-为了使训练可行，本文使用sampled softmax技术\cite{jean-EtAl:2015:ACL-IJCNLP}
+为了使训练可行，本章使用sampled softmax技术\cite{jean-EtAl:2015:ACL-IJCNLP}
 训练模型。
-本文的训练方法和标准sampled softmax之间的主要差异在于
-本文使用目标词的一定窗口内的词作为负样本\footnote{本文使用的窗口大小为8,172。}。
+本章的训练方法和标准sampled softmax之间的主要差异在于
+本章使用目标词的一定窗口内的词作为负样本。\footnote{本章使用的窗口大小为8,172。}
 初步实验表明，这种方法有更好的性能。
 在NVIDIA P100 GPU上，训练一种语言的ELMo大约需要3天。
 
-\subsection{实验结果}[Results]\label{sec:seq:results}
+\subsection{结果}[Results]\label{sec:seq:exp:results}
 \ltfontsize{\wuhao}
 \begin{longtable}{p{5cm}cccc}%
 	\longbionenumcaption{}{在通用依存句法分析中使用ELMo的比较。}{Table $\!$}
 	{}{Comparison of model with and without ELMo.\label{tbl:seq:main-result}}{0em}{0.5em}\\
-	\toprule[1.5pt] & \multicolumn{2}{c}{不使用ELMo} & \multicolumn{2}{c}{使用ELMo} \\ 
-	树库 & UPOS & LAS & UPOS & LAS \\
-	\midrule[1pt]
+	\toprule[1.5pt] & \multicolumn{2}{c}{未使用ELMo} & \multicolumn{2}{c}{使用ELMo}\\ 
+	树库 & UPOS & LAS & UPOS & LAS\\ \midrule[1pt]
 	\endfirsthead
 	\multicolumn{5}{c}{表~\thetable（续表）}\vspace{0.5em}\\
-	\toprule[1.5pt] & \multicolumn{2}{c}{不使用ELMo} & \multicolumn{2}{c}{使用ELMo}   \\ 
+	\toprule[1.5pt] & \multicolumn{2}{c}{未使用ELMo} & \multicolumn{2}{c}{使用ELMo}\\ 
 	树库 & UPOS & LAS & UPOS & LAS \\
 	\midrule[1pt]
 	\endhead
@@ -663,7 +615,7 @@ Chinese-GSD & \bf 94.60 & 79.70 & 94.30 & \bf 79.85 \\
 上面的结果表明ELMo可以有效提高通用词性标注和通用依存句法分析的性能。
 
 \begin{table}[t]
-	\bicaption{}{本文使用ELMo模型与当前最优通用句法分析系统的对比。}{Table $\!$}{The comparison with the state-of-the-art UD parsing systems.\label{tbl:seq:sota-compare}}
+	\bicaption{}{本章使用ELMo模型与当前最优通用句法分析系统的对比。}{Table $\!$}{The comparison with the state-of-the-art UD parsing systems.\label{tbl:seq:sota-compare}}
 	\vspace{0.5em}\centering\wuhao
 	\begin{tabular}{lcc}
 		\toprule[1.5pt]
@@ -671,24 +623,25 @@ Chinese-GSD & \bf 94.60 & 79.70 & 94.30 & \bf 79.85 \\
 		\midrule[1pt]
 		UDpipe 2.0 \cite{K18-2020} & 96.94 & 85.05 \\
 		UDify \cite{DBLP:journals/corr/abs-1904-02099} & 95.88 & 85.50 \\
-		深度双仿射（不使用ELMo） & 96.15 & 84.94 \\
+		深度双仿射（未使用ELMo） & 96.15 & 84.94 \\
 		深度双仿射（使用ELMo） & \bf 97.07 & \bf 86.04 \\
 		\bottomrule[1.5pt]
 	\end{tabular}
 \end{table}
-本文也在表\ref{tbl:seq:sota-compare}中将本文的使用ELMo的模型与
+本章也在表\ref{tbl:seq:sota-compare}中将本章的使用ELMo的模型与
 当前最优的通用句法分析系统进行了对比。
 对比的系统包括；1）词性句法联合模型 UDpipe 2.0 \cite{K18-2020}；
 2）多语言多任务联合模型UDify \cite{DBLP:journals/corr/abs-1904-02099}。
 这一比较显示ELMo能够帮助通用词性标注/依存句法分析取得当前最优的性能。
 
-本文还研究了UPOS提升与LAS提升之间的相关性。
-其Pearson相关系数为0.5196\footnote{$p<0.001$}。
+本章还研究了UPOS提升与LAS提升之间的相关性。
+其Pearson相关系数为0.5196（$p<0.001$）。
 这表明使用ELMo所带来的改进在两个语法任务中是一致的。
 
-\section{分析}[Analysis]
-\subsection{树库属性与性能提升的关系}
-第\ref{sec:seq:results}节显示ELMo可以给通用词性标注与通用句法分析带来性能的提升。
+\section{分析}[Analysis]\label{sec:seq:anal}
+
+\subsection{树库属性与性能提升的关系}[The Relation between Performance Gains and Treebank Attributes]
+第\ref{sec:seq:exp:results}节显示ELMo可以给通用词性标注与通用句法分析带来性能的提升。
 然而，对于不同的树库，提升的幅度是不同的。
 ELMo给Hungarian-Szeged带来的提升幅度最大，
 但给Galician-CTG带来了负面效果。\footnote{ELMo
@@ -697,24 +650,24 @@ ELMo给Hungarian-Szeged带来的提升幅度最大，
 这一观察表明ELMo的作用
 可能与树库的某些属性相关。
 为了深入了解这些属性，
-本文对不同语言的树库进行分析实验，
+本章对不同语言的树库进行分析实验，
 检查他们的属性是如何与性能提升相关的。
-本文关注一个树库五方面的属性，这些属性包括：
+本章关注一个树库五方面的属性，这些属性包括：
 \begin{itemize}
-\item \textit{训练数据大小}：本文使用训练数据中的词数来表示训练大小。\footnote {以10为底的对数。}
-\item \textit{形态学丰富程度}：本文按照文献\inlinecite{bentz-EtAl:2016:CL4LC}建议，使用语料库中的\textit{词熵}
+\item \textit{训练数据大小}：本章使用训练数据中的词数来表示训练大小。\footnote {以10为底的对数。}
+\item \textit{形态学丰富程度}：本章按照文献\inlinecite{bentz-EtAl:2016:CL4LC}建议，使用语料库中的\textit{词熵}
 作为该语料库的\textit{形态学丰富程度}的评估。
 根据文献\inlinecite{bentz-EtAl:2016:CL4LC}，
 单词熵与语言学家定义的形态复杂性\footnote{参考：世界语言形态学项目\inlinecite{wals}}有很好的相关性。
-\item \textit{非投射程度}：本文使用训练数据中非投影弧的百分比
+\item \textit{非投射程度}：本章使用训练数据中非投影弧的百分比
 作为\textit{非投射程度}的评价。
-\item \textit{多义词丰富程度}：本文将拥有多个词性的词近似定义为多义词。
-本文使用树库中多义词的比例作为树库的多义词丰富程度。
+\item \textit{多义词丰富程度}：本章将拥有多个词性的词近似定义为多义词。
+本章使用树库中多义词的比例作为树库的多义词丰富程度。
 由于上下文相关词向量的设计初衷是解决一词多义问题，
-本文希望通过这一指标衡量上下文相关词向量能否给多义词丰富的树库带来更大的提升。
-\item \textit{未登录词比例}：本文将在测试数据出现但不在训练数据出现的词定义为\textit{未登录词}（OOV）。
+本章希望通过这一指标衡量上下文相关词向量能否给多义词丰富的树库带来更大的提升。
+\item \textit{未登录词比例}：本章将在测试数据出现但不在训练数据出现的词定义为\textit{未登录词}（OOV）。
 OOV的计算与生语料无关。
-本文将测试数据中此类单词的百分比定义为\textit{未登录词比例}。
+本章将测试数据中此类单词的百分比定义为\textit{未登录词比例}。
 \end{itemize}
 其中\textit{训练数据大小}、\textit{形态学丰富程度}以及\textit{非投射程度}在文献\inlinecite{dozat-qi-manning:2017:K17-3}
 也得到了讨论。
@@ -743,14 +696,14 @@ OOV的计算与生语料无关。
 	\end{tabular}
 \end{table}
 
-本文首先在图\ref{fig:seq:correlation}中显示了本文分析的树库属性与词性/句法性能的绝对提升/错误率降低之间的关系。
+本章首先在图\ref{fig:seq:correlation}中显示了本章分析的树库属性与词性/句法性能的绝对提升/错误率降低之间的关系。
 除了非投射性，图\ref{fig:seq:correlation}显示这些属性与性能提升基本单调（monotonic）地相关。
 基于这一图示，
-本文使用两种统计相关性评价方法---评价两个变量线性相关性的Pearson相关系数和评价两个变量排序相关性的Spearman相关系数。
+本章使用两种统计相关性评价方法---评价两个变量线性相关性的Pearson相关系数和评价两个变量排序相关性的Spearman相关系数。
 表\ref{tbl:seq:correlation}显示了相关性的评价结果
 由于相关系数的绝对值
 不具备可解释性，
-本文只使用这个值衡量哪个属性
+本章只使用这个值衡量哪个属性
 与性能提升更相关。
 表\ref{tbl:seq:correlation}显示在所有这些因素中，
 \textit{未登录词比例}与通用词性标注性能提升的相关性最大。
@@ -758,13 +711,15 @@ OOV的计算与生语料无关。
 而\textit{未登录词比例}与通用句法分析性能提升的相关性接近。
 需要强调的是，
 训练数据较少的树库，通常会有更多的未登录词出现在测试数据中。
-\footnote{在本文实验的数据集中，\textit{训练数据大小}和\textit{未登录词比例}之间的皮尔逊相关性为-0.5477。}
-因此，本文认为\textit{未登录词比例} 是一个更相关并且信息丰富的属性。
+\footnote{在本章实验的数据集中，\textit{训练数据大小}和\textit{未登录词比例}之间的皮尔逊相关性为-0.5477。}
+因此，本章认为\textit{未登录词比例} 是一个更相关并且信息丰富的属性。
 
 \begin{figure}[t]
 	\centering
 	\includegraphics[width=\columnwidth]{seqlabel/error_analysis}
-	\bicaption{}{\yjcomment{todo}}{Fig. $\!$}{Dependency arc precision/recall relative to three attributes.
+	\bicaption{}{依存弧三种属性对应的准确率/召回率。
+		绿色虚线代表错误率降低，错误率降低的范围在0.0到0.3。}
+	{Fig. $\!$}{Dependency arc precision/recall relative to three attributes.
 		The dashed green line shows the error reduction.
 		The limits of y-axis for error reduction are fixed to (0.0, 0.3).\label{fig:seq:error_analysis}}
 \end{figure}
@@ -779,8 +734,8 @@ OOV的计算与生语料无关。
 		& \multicolumn{2}{c}{登录词} & \multicolumn{2}{c}{未登录词}  \\
 		模型 & UPOS & LAS & UPOS & LAS  \\
 		\midrule[1pt]
-		未使用ELMo的模型 & 98.00 & 87.97 & 88.50 & 79.52 \\
-		使用ELMo的模型 & \textbf{98.27} & \textbf{88.58} & \textbf{93.36} & \textbf{81.32} \\
+		未使用ELMo & 98.00 & 87.97 & 88.50 & 79.52 \\
+		使用ELMo & \textbf{98.27} & \textbf{88.58} & \textbf{93.36} & \textbf{81.32} \\
 		& 13.50\% & 5.07\%& 42.26\% & 8.79\%\\
 		\bottomrule[1.5pt]
 	\end{tabular}
@@ -788,19 +743,19 @@ OOV的计算与生语料无关。
 
 除了这些树库相关属性，
 ELMo的带来的性能提升与非树库属性存在潜在的相关性。
-为了探索这种相关性，本文参考Ma等人在2018年的文献\inlinecite{P18-1130}
+为了探索这种相关性，本章参考Ma等人在2018年的文献\inlinecite{P18-1130}
 以及McDonald与Nivre在2007年的文献\inlinecite{mcdonald-nivre:2007:EMNLP-CoNLL2007}
 并研究了三个结构相关的属性。
 这些属性包括\textit{弧长度}（dependency length）、\textit{深度}（distance to root）和\textit{修饰词个数}（number of modifier siblings)。 
-本文研究这些属性的一个出发点是使用ELMo的模型
+本章研究这些属性的一个出发点是使用ELMo的模型
 可能为某种类型的弧带来更大的提升。比如使用ELMo的模型利用ELMo更好地编码上下文，从而取得更好的长距离弧的性能。
-本文在图\ref{fig:seq:error_analysis}中显示了这一分析结果。
+本章在图\ref{fig:seq:error_analysis}中显示了这一分析结果。
 图\ref{fig:seq:error_analysis}中也包含使用ELMo给每种结构属性带来的错误率降低。
 可见，不同指标下的使用ELMo带来的错误率降低几乎一致。
 这一观察显示了结构属性与性能提升没有显著相关性。
-因此，本文在后文分析中着重关注ELMo在未登录词方面的性能。
+因此，本章在后文分析中着重关注ELMo在未登录词方面的性能。
 
-\subsection{未登录词性能的详细分析}
+\subsection{未登录词的性能}[Detailed Out-of-Vocabulary Words Performance]
 
 \begin{figure}[t]
 	\includegraphics[width=\textwidth]{seqlabel/pos_error_distribution}
@@ -808,8 +763,8 @@ ELMo的带来的性能提升与非树库属性存在潜在的相关性。
 \end{figure}
 
 为了进一步证实ELMo带来的改进主要发生在未登录词中，
-本文在合并后的测试数据上比较了模型的在登录词
-和未登录词的性能\footnote{IV和OOV词的比例测试数据为87.38％和12.62％。}。
+本章在合并后的测试数据上比较了模型的在登录词
+和未登录词的性能。\footnote{IV和OOV词的比例测试数据为87.38％和12.62％。}
 表\ref {tbl:seq:oov_and_iv}显示了比较的结果。
 根据表\ref{tbl:seq:oov_and_iv}，ELMo在通用词性标注
 和通用依存句法分析上给未登录词带来了比词典内词更多的提升。
@@ -817,7 +772,7 @@ ELMo的带来的性能提升与非树库属性存在潜在的相关性。
 对于通用依存句法分析，提升的绝对值为1.80，误差减少为8.79％。
 
 除了未登录词的详细性能，
-本文还在图\ref {fig:seq:pos_error_dist}中绘制了使用与不使用ELMo的模型的通用词性标注误差分布。
+本章还在图\ref {fig:seq:pos_error_dist}中绘制了使用与不使用ELMo的模型的通用词性标注误差分布。
 通过图\ref{fig:seq:pos_error_dist}可以看出：两类模型在
 如\textit{助词}（AUX），\textit{并列连词}（CCONJ）和\textit{从句连词}（SCONJ）
 一类的功能词上表现几乎一致。
@@ -825,39 +780,43 @@ ELMo的带来的性能提升与非树库属性存在潜在的相关性。
 这个结果从另一种角度证明了ELMo对OOV的影响。
 因为作为一个新兴的实体名称，未登录词中专有名词的比例更大。
 
-至此，本文的一系列分析都指出：\textbf{ELMo主要通过提高未登录词的性能来提高语法NLP任务的性能}。
+至此，本章的一系列分析都指出：\textbf{ELMo主要通过提高未登录词的性能来提高语法NLP任务的性能}。
 
-\subsection{ELMo具有更好的未登录词的抽象能力}\label{sec:seq:abstration}
+\subsection{未登录词句法抽象能力的分析}[Analysis on OOV's Syntactic Abstraction]\label{sec:seq:anal:abstration}
 \begin{table}[t]
-	\bicaption{}{在ELMo学习过程中召回与未召回的两类未登录词的性能的比较，}{Table $\!$}{A comparison on the OOV word performance.
+	\bicaption{}{在ELMo学习过程中召回（出现在ELMo的训练数据中）与未召回（未出现在ELMo的训练数据中）的两类未登录词的性能的比较。}{Table $\!$}{A comparison on the OOV word performance.
 		We categorize OOV words into two types, indicating whether a word is recalled
 		during the learning of ELMo.\label{tbl:seq:recalled_norecalled}}
 	\vspace{0.5em}\centering\wuhao
 	\begin{tabular}{lcc cc}
 		\toprule[1.5pt]
-		& \multicolumn{2}{c}{recalled} & \multicolumn{2}{c}{un-recalled}  \\
-		models & UPOS & LAS & UPOS & LAS  \\
+		& \multicolumn{2}{c}{召回} & \multicolumn{2}{c}{未召回}  \\
+		模型 & UPOS & LAS & UPOS & LAS  \\
 		\midrule[1pt]
-		w/o ELMo & 88.85 & 79.52 & 88.29 & 79.52 \\
-		w/ ELMo & \textbf{93.90} &  \textbf{81.42} & \textbf{92.05} & \textbf{80.99} \\
+		未使用ELMo & 88.85 & 79.52 & 88.29 & 79.52 \\
+		使用ELMo & \textbf{93.90} &  \textbf{81.42} & \textbf{92.05} & \textbf{80.99} \\
 		& 45.29\% & 9.27\% & 32.11\% & 7.18\% \\
 		\bottomrule[1.5pt]
 	\end{tabular}
 \end{table}
 
-\begin{figure}[t]
-	\centering
-	\includegraphics[width=\textwidth]{seqlabel/visualization}
-	\bicaption{}{未登录词的可视化的结果。左图显示的是ELMo上下文无关层的结果，右图显示的是Word2vec的结果。
-	图中也包含四种词性的典型词。由于Word2vec采用固定词表的原因，无法给每个未登录词以适当的表示。
-	所以左侧比右侧有更多的点。}{Fig.$\!$}{Visualization of the OOV word embeddings from ELMo (left) and Word2vec (right)
-		along with the prototype word for 4 POS tags for content words.
-		The left figure presents more words than the right one because
-		ELMo can produce embeddings for any word,
-		while Word2vec only yields embeddings for encountered words,
-		and some OOV words are not recalled.\label{fig:seq:visualize}
-	}
-\end{figure}
+\begin{table}[t]
+	\bicaption{}{消融实验结果。括号里的数代表未召回的未登录词的准确率。}
+	{Table $\!$}{The ablation results. The number in the brackets shows the performance  of unrecalled OOV.\label{tbl:seq:ablation}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{l | ccc| ccc}
+		\toprule[1.5pt]
+		& \multicolumn{3}{c|}{UPOS} &  \multicolumn{3}{c}{LAS}\\
+		& 宏平均 & 登录词 & 未登录词 & 宏平均 & 登录词 & 未登录词 \\
+		\midrule[1pt]
+		Word2vec & 93.04 & 96.80 & 72.59 (62.83) & 82.73 & 84.94 & 72.15 (62.83) \\
+		FastText & 94.91 & 96.81 & 83.69 (75.05) & 82.83 & 84.73 & 73.34 (68.23) \\
+		基于词的ELMo & 95.64 & 97.42 & 85.52 (68.48) & 84.06 & 85.96 & 74.68 (64.07) \\
+		ELMo-CNN & 96.60 & 97.58 & 90.74 (85.56) & 84.75 & 86.19 & 77.38 (72.79)\\
+		基于字的ELMo & \bf 96.82 & \bf 97.68 & \bf 91.50 (86.74) & \bf 84.94 & \bf 86.43 & \bf 77.82 (73.60)\\
+		\bottomrule[1.5pt]
+	\end{tabular}
+\end{table}
 
 未登录词一直是影响NLP系统性能的问题。
 未登录词问题的一般解决方案是用高层次抽象来表示单词。
@@ -872,9 +831,9 @@ Ballesteros等人在2015年的文献\inlinecite{ballesteros-dyer-smith:2015:EMNL
 2）ELMo使用根据上下文表示（BiLSTM）以及词形表示（CNN）对单词的句法功能进行更好的``抽象''。
 
 直观地讲，``记忆''效果可以为未登录带来性能提升。
-然而，由于在学习ELMo时穷尽所有词汇是不现实的，本文更加关注需要``抽象''的未登录词的性能。
+然而，由于在学习ELMo时穷尽所有词汇是不现实的，本章更加关注需要``抽象''的未登录词的性能。
 为了评价需要``抽象''的未登录词的性能，
-本文将未登录词分为两类，代表在学习ELMo时是否遇到（召回）这个词。
+本章将未登录词分为两类，代表在学习ELMo时是否遇到（召回）这个词。
 在召回的未登录词上的表现可以被视为对``记忆''效果的一种评估，
 而未召回的未登录词则反映了ELMo的``抽象''效果。
 表\ref{tbl:seq:recalled_norecalled}
@@ -885,73 +844,98 @@ Ballesteros等人在2015年的文献\inlinecite{ballesteros-dyer-smith:2015:EMNL
 这个结果表明ELMo既能记忆未登录词，也能抽象未登录词。
 未登录词的抽象能力是ELMo性能提升的重要来源。
 
-\subsection{ELMo对词的抽象能力主要源于更好地建模了词形}
-
-\begin{table}[t]
-	\bicaption{}{消融实验结果}{Fig.$\!$}{The ablation results.}\label{tbl:seq:ablation}
-	\vspace{0.5em}\centering\wuhao
-	\begin{tabular}{p{2.8cm} | cc cc cc | cc cc}
-		\hline
-		& \multicolumn{6}{c|}{w/o context} & \multicolumn{4}{c}{w/ context} \\
-		& \multicolumn{2}{c}{Word2vec} & \multicolumn{2}{c}{FastText} & \multicolumn{2}{c|}{char CNN} &   \multicolumn{2}{c}{char ELMo} & \multicolumn{2}{c}{word ELMo} \\
-		Treebank &  UPOS & LAS &  UPOS & LAS & UPOS & LAS & UPOS & LAS  & UPOS & LAS \\
-		\hline
-		Dutch-Alpino & 93.32 & 86.73 & 94.69 & 86.13 & 95.65 & \bf 88.10 & \bf 96.13 & 87.86 & 94.82 & 86.73 \\
-		Dutch-LassySmall & 93.11 & 85.06 & 95.02 & 84.95 & \bf 96.54 & 86.56 & 96.52 & \bf 87.05 & 95.33 & 86.22 \\
-		English-EWT & 94.24 & 86.71 & 94.42 & 86.20 & 96.14 & 87.35 & \bf 96.21 & \bf 87.53 & 95.47 & 87.10 \\
-		English-GUM & 92.59 & 83.00 & 93.16 & 81.90 & 95.79 & 85.84 & \bf 95.97 & \bf 86.07 & 95.55 & 85.00 \\
-		English-LinES & 94.73 & 78.24 & 95.16 & 77.78 & 96.69 & 79.53 & \bf 96.93 & \bf 79.59 & 96.27 & 79.37 \\
-		French-GSD & 95.67 & 87.07 & 96.61 & 86.82 & 97.36 & \bf 87.52 & \bf 97.47 & 87.40 & 96.86 & \bf 87.40\\
-		French-Sequoia & 97.10 & 87.83 & 97.41 & 87.50 & 98.27 & 89.82 & \bf 98.62 & \bf 90.12 & 98.16 & 89.64 \\
-		French-Spoken & 92.67 & 73.90 & 94.67 & 74.14 & 96.27 & \bf 75.88 & \bf 96.59 & 75.64 & 95.86 & 75.64 \\
-		Hungarian-Szeged & 87.09 & 70.85 & 92.90 & 74.67 & 95.95 & 79.89 & \bf 96.46 & \bf 81.02 & 92.90 & 76.35 \\
-		Italian-ISDT & 96.82 & 90.18 & 97.68 & 89.80 & 98.05 & 90.11 & \bf 98.24 & \bf 90.85 & 97.93 & 90.46 \\
-		Italian-PoSTWITA & 92.84 & 78.79 & 94.25 & 79.67 & 95.79 & \bf 80.15 & \bf 96.06 & 80.01 & 94.94 & 79.10 \\
-		Slovak-SNK & 86.27 & 84.42 & 92.98 & 84.35 & \bf 96.65 & \bf 86.23 & 96.61 & 86.11 & 93.63 & 85.73 \\
-		\hline
-		Macro average & 93.04 & 82.73 & 94.91 & 82.83 & 96.60 & 84.75& \bf 96.82 & \bf 84.94 & 95.64 & 84.06 \\
-		\hline
-		\hline
-		Micro IV & 96.80 & 84.94 & 96.81 & 84.73 & 97.58 & 86.19 & \bf 97.68 & \bf 86.32 & 97.42  & 85.96 \\
-		\quad error reduction & & & 0.39\% & -1.41\%& 24.41\% & 8.30\% & 24.61\% & 9.17\% & 19.57\% & 6.78\% \\
-		Micro OOV & 72.59 & 72.15 & 83.69 & 73.34 & 90.74 & 77.38 & \bf 91.50 & \bf 77.82  & 85.52 & 74.68 \\
-		\quad error reduction & & & 40.51\% & 4.27\% & 66.20\% & 18.76\% & 69.00\% & 20.35\% & 47.18\% & 9.06\% \\
-		Micro unrecalled OOV & 62.83 & 62.83 & 75.05 & 68.23 & 85.56 & 72.79 &\bf 86.74 &\bf 73.60 & 68.48 & 64.07 \\
-		\quad error reduction & &  & 32.86\% & 14.52\% & 61.16\% & 26.86\% & 64.32\% & 28.96\% & 15.19\% & 3.32\% \\
-		\hline
-	\end{tabular}
-\end{table}
+\subsection{未登录词词形抽象能力的分析}[Analysis on OOV's Morphological Abstraction]\label{sec:seq:anal:ablation}
 
 根据前文，ELMo具备抽象一个词的句法功能的能力。
-本文希望进一步探究这类抽象能力的来源。
+本章希望进一步探究这类抽象能力的来源。
 如前文讨论，未登录词的句法功能可以通过1）它的上下文
 以及2）它的词形进行推断。
 为了判断这两种因素哪种贡献更大，
-本文对模型进行了一系列消融实验。
-这些实验包括：
+本章对于模型输入的不同组合进行了研究。
+为了消除深度双仿射分析器中字级别表示（公式\ref{eq:seq:word}中的$\tilde{\mathbf{v}}$）的影响，
+本章只使用可训练的词向量$\mathbf{w}$与固定词向量$\mathbf{p}$的组合作为词向量。
+其中固定词向量包括：
 \begin{itemize}
-	\item \textit{FastText}：本文使用FastText\cite{Q17-1010}
-	\item \textit{基于字的CNN}：
-	\item \textit{基于词向量的ELMo}：
+	\item \textit{Word2vec}：Word2vec是本章的未使用上下文相关词向量的基线实验系统。
+	\item \textit{FastText}：FastText\cite{Q17-1010}是一种能够建模任意词的静态词向量。
+	由于FastText具备建模任意词的能力，本章将Word2vec系统中的Word2vec替换为
+	FastText以验证提高未登录词建模能力是否能够带来性能提升。
+	\item \textit{ELMo-CNN}：本章使用ELMo中上下文无关的词向量（CNN输出）替代ELMo。
+	这一模型移除了ELMo的上下文建模能力，
+	从而直接讨论词形抽象对于性能的影响。
+	\item \textit{基于词向量的ELMo}：本章将ELMo中的CNN替换为普通词向量
+	并按照第\ref{sec:seq:exp:settings}节的方法重新训练了ELMo。
+	这一模型移除了ELMo的词形抽象能力，
+	从而直接讨论建模上下文对于性能的影响。
+	\item \textit{基于字的ELMo}：本章的使用上下文相关词向量的模型。
 \end{itemize}
 
-\subsection{可视化}[Visualization]
-\begin{table*}
+\begin{table}[t]
+	\bicaption{}{使用ELMo的模型对于多义词/单义词的句法分析性能。本章将包含多个词性的词近似定义为多义词。最后一行显示错误率降低。}{Table $\!$}{A comparison of the polysemous/monosemous word performance.
+		We determine a word as polysemy when it has multiple POS in the training data.
+		The last row shows the error reductions.\label{tbl:seq:poly}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{lcc}
+		\toprule[1.5pt]
+		模型 & 多义词 & 单义词 \\
+		\midrule[1pt]
+		未使用ELMo & 88.90 & 87.84 \\
+		使用ELMo & \textbf{89.47} & \textbf{88.12} \\
+		& 5.13\% & 5.13\% \\
+		\bottomrule[1.5pt]
+	\end{tabular}
+\end{table}
+\begin{figure}[t]
 	\centering
-	\footnotesize
-	\caption{The comparison with baselines using different inputs.
-		%		The input to the \textit{w/o ELMo} is $\mathbf{w}+\mathbf{p}$,
-		%		that to the \textit{char ELMo} is $\mathbf{w}+\mathbf{char\ ELMo}$,
-		%		and that of the \textit{word EMo} is $\mathbf{w}+\mathbf{word\ ELMo}$.
-	}\label{tbl:ablation}
-	
-\end{table*}
+	\includegraphics[width=\textwidth]{seqlabel/visualization}
+	\bicaption{}{未登录词的可视化的结果。左图显示的是ELMo上下文无关层的结果，右图显示的是Word2vec的结果。
+		图中也包含四种词性的典型词。由于Word2vec采用固定词表的原因，无法给每个未登录词以适当的表示。
+		所以左侧比右侧有更多的点。}{Fig. $\!$}{Visualization of the OOV word embeddings from ELMo (left) and Word2vec (right)
+		along with the prototype word for 4 POS tags for content words.
+		The left figure presents more words than the right one because
+		ELMo can produce embeddings for any word,
+		while Word2vec only yields embeddings for encountered words,
+		and some OOV words are not recalled.\label{fig:seq:visualize}
+	}
+\end{figure}
+本章在六种语言\footnote{包括荷兰语、英语、法语、匈牙利语、意大利语和斯洛伐克语。}上进行这一实验。
+实验结果如表\ref{tbl:seq:ablation}所示。
+根据表\ref{tbl:seq:ablation}，
+使用基于字级别词表示的模型（\textit{ELMo-CNN}和\textit{基于字的ELMo}）
+的性能显著好于使用传统词向量的模型（\textit{Word2vec}和\textit{基于词的ELMo}）。
+而使用基于字级别词表示的模型带来了显著的未登录词的错误率降低。
+这一实验结果表明基于字级别词表示在ELMo的词抽象能力中发挥了很大的作用。
 
+通过比较表\ref{tbl:seq:ablation}中\textit{Word2vec}与\textit{FastText}
+的结果，
+使用\textit{FastText}作为输入的模型的性能好于\textit{Word2vec}。
+这一结果表明建模词形信息能够提升模型性能。
+然而，使用\textit{FastText}的模型相较使用字级别词表示的模型仍有较大差距，
+可见ELMo的字级别词表示具有更强的表示能力。
+本章猜测这种表示能力来自CNN的建模字n-gram的网络结构以及语言模型学习目标。
+
+另一个值得注意的结果是字级别词表示（\textit{ELMo-CNN}）取得了与完整ELMo相近的性能。
+同时，这一结果显著好于基于词的ELMo。
+由于基于词的ELMo只建模了上下文，为了进一步观察建模上下文对于模型性能的影响，
+本章将词依据是否具有多个词性近似分类为多义词与单义词。
+单义词与多义词在句法分析上的性能如表\ref{tbl:seq:poly}所示。
+根据表\ref{tbl:seq:poly}的结果，
+单义词与多义词的错误率降低几乎相同。
+本章猜测，尽管ELMo的设计初衷是建模一词多义，
+在将其应用于句法分析时，其作为副产物产生的上下文无关的表示反而发挥了更大的作用。
+
+%\subsection{可视化}[Visualization]
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=\textwidth]{seqlabel/low_res}
+	\bicaption{}{数据稀缺句法分析的实验结果}{Fig. $\!$}{The simulation results on low-resource settings\label{fig:seq:low-res}
+	}
+\end{figure}
 前文将模型性能的提升归因于ELMo在可以学习更好的未登录词的的句法抽象。
-为了通过实证测试，本文对ELMo中上下文无关的词向量（CNN的输出）进行了可视化。
-本文使用T-SNE \cite{maaten2008visualizing}对未登录词以及特定词性的典型词进行从高维空间到2维平面的可视化。\footnote{本文
+为了通过实证测试，本章对ELMo中上下文无关的词向量（CNN的输出）进行了可视化。
+本章使用T-SNE \cite{maaten2008visualizing}对未登录词以及特定词性的典型词进行从高维空间到2维平面的可视化。\footnote{本章
 	关注的未登录词是从{UD\_English-EWT}中提取的。
-	本文使用{Bush}和{Iraq}作为专有名词的典型词，
+	本章使用{Bush}和{Iraq}作为专有名词的典型词，
 	{people}和{food}作为名词的典型词，
 	{good}和{other}作为形容词的典型词，
 	{know}和{get}作为动词的典型词。}
@@ -963,24 +947,30 @@ Ballesteros等人在2015年的文献\inlinecite{ballesteros-dyer-smith:2015:EMNL
 相比之下，Word2vec的产生的词向量分散在嵌入空间中的不同位置，
 不能充分捕捉单词之间的句法相似性。
 
-一个自然产生的问题是：ELMo能否完全取代Word2vec?
-本文进一步进行了消融实验。
-本文消融实验的模型完全取消了Word2vec的使用，
-其结果显示在表\ref{tbl:seq:ablation}中。
-该结果表明，仅使用ELMo作为单词嵌入实现了与本文的最终模型相当的性能，
-并且大幅度优于基线模型。
-这一观察再次证实了ELMo学习更好的抽象。
-
+\subsection{数据稀缺句法分析模拟实验}[Low-resource Parsing Simulation]\label{sec:seq:anal:low-res}
 前文展示了ELMo通过学习更好的未登录词抽象来提高语法分析性能。
 对于训练数据不足的领域，未登录词的问题往往非常严重。
-ELMo可以为解决这类问题的提供有效的数据支撑。
+ELMo乃至上下文相关词向量可以为解决这类问题的提供有效的数据支撑。
+为了验证这一假设，
+本章进行了数据稀缺句法分析模拟实验。
+本章随机采样了UD\_English-EWT以及UD\_German-GSD原训练数据中的0.5\%，1\%，2\%，5\%，10\%以及20\%作为训练集，
+并验证了ELMo以及本章第\ref{chp:elmo}章提出的SelfAttnLBL。
+实验结果如图\ref{fig:seq:low-res}所示。
+根据图\ref{fig:seq:low-res}的结果，
+使用上下文相关词向量可以显著提高模型在少量数据时的性能（0.5\%以及1\%的训练数据）。
+ELMo与本章提出的SelfAttnLBL性能相当。
+这一观察验证了前文的假设。
+根据Howard与Ruder在2018年的文献\inlinecite{P18-1031}，
+预训练通过将表示能力转移到特定任务上帮助数据稀缺任务。
+本章进一步将这种能力细化到预训练模型对于词的抽象上。
 
 \section{本章小结}[Conclusion]
 
-本文使用ELMo作为额外的词向量提高了
----通用依存句法分析的性能。
-进一步分析表明了改进的
-主要原因是ELMo为未登录词提供了更好的抽象。
+本章使用ELMo作为额外的词向量提高了通用依存句法分析的性能。
+本章进一步分析了性能提升的原因并将其归纳为
+ELMo为未登录词提供了更好的抽象。
+其中ELMo建模词形的能力为未登录词的良好抽象作出了重要贡献。
 这些结果表明
-ELMo是
-一种解决数据不足的NLP任务的很有前途的手段。
+上下文相关词向量是
+一种解决数据不足自然语言处理任务的很有前途的手段。
+本章也通过模拟实验验证了这一假设。

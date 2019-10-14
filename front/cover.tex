@@ -19,8 +19,8 @@
   %=========
   ctitleone={局部多孔质气体静压},%本科生封面使用
   ctitletwo={轴承关键技术的研究},%本科生封面使用
-  ctitlecover={基于上下文相关词向量的语言分析技术研究},%放在封面中使用，自由断行
-  ctitle={基于上下文相关词向量的语言分析技术研究},%放在原创性声明中使用
+  ctitlecover={基于动态上下文相关词向量的\\句子级语言分析技术研究},%放在封面中使用，自由断行
+  ctitle={基于动态上下文相关词向量的句子级语言分析技术研究},%放在原创性声明中使用
   csubtitle={}, %一般情况没有，可以注释掉
   cxueke={工学},
   csubject={计算机应用技术},
@@ -30,7 +30,7 @@
   cassosupervisor={车万翔教授}, % 副指导老师
   %ccosupervisor={某某某教授}, % 联合指导老师
   % 日期自动使用当前时间，若需指定按如下方式修改：
-  %cdate={超新星纪元},
+  cdate={2019年6月},
   cstudentid={9527},
   cstudenttype={同等学力人员}, %非全日制教育申请学位者
   %（同等学力人员）、（工程硕士）、（工商管理硕士）、
@@ -40,37 +40,171 @@
   %=========
   % 英文信息
   %=========
-  etitle={},
-  esubtitle={},
+  etitle={Sentence-level Language Analysis with Contextualized Word Embeddings},
+  esubtitle={Sentence-level Language Analysis with Contextualized Word Embeddings},
   exueke={Engineering},
   esubject={Computer Application Technology},
   eaffil={School of Computer Science and Technology},
   eauthor={Yijia Liu},
-  esupervisor={Professor Bing Qin},
-  eassosupervisor={Professor Wanxiang Che},
+  esupervisor={Prof. Bing Qin},
+  eassosupervisor={Prof. Wanxiang Che},
   % 日期自动生成，若需指定按如下方式修改：
-  edate={December, 2017},
+  edate={June, 2019},
   estudenttype={Master of Art},
   %
   % 关键词用“英文逗号”分割
-  ckeywords={\TeX, \LaTeX, CJK, 嗨！, thesis},
-  ekeywords={\TeX, \LaTeX, CJK, template, thesis},
+  ckeywords={自然语言处理, 上下文相关词向量, 句子级语言分析技术, 中文分词, 依存句法分析},
+  ekeywords={Natural language processing, Contextualized embeddings, Sentence-level language analysis, Chinese word segmentation, Dependency parsing},
 }
 
 \begin{cabstract}
 
-%摘要的字数（以汉字计），硕士学位论文一般为500 $\sim$ 1000字，博士学位论文为1000 $\sim$ 2000字，
-%均以能将规定内容阐述清楚为原则，文字要精练，段落衔接要流畅。摘要页不需写出论文题目。
-%英文摘要与中文摘要的内容应完全一致，在语法、用词上应准确无误，语言简练通顺。
-%留学生的英文版博士学位论文中应有不少于3000字的“详细中文摘要”。
-%
-%  关键词是为了文献标引工作、用以表示全文主要内容信息的单词或术语。关键词不超过 5
-%  个，每个关键词中间用分号分隔。（模板作者注：关键词分隔符不用考虑，模板会自动处
-%  理。英文关键词同理。）
+自然语言处理是人工智能的重要子学科。
+作为自动处理文本的第一步，将词转换为数值化表示很大程度地影响了
+自然语言处理的性能。
+词向量为自然语言的最小语义单元 --- 词提供了包含句法语义信息的稠密向量表示。
+作为基于神经网络的自然语言处理的基础，
+依据词义分布假设构造的词向量
+给诸多自然语言处理模型带来了性能的提升。
+为了提高词向量的学习效率，
+前人工作进一步对词向量进行静态假设，即一个词有唯一的向量表示。
+这一假设使得在大规模数据上学习词向量成为可能，
+但也使静态词向量无法根据上下文环境决定其表示，
+因而无法建模``一词多义''等现象。
+动态上下文相关词向量是近年来提出的一种词向量算法。
+这种算法取消了静态假设并根据上下文动态地决定一个词的向量表示。
+在包括问答、文本蕴含、情感分析在内的多项任务中，
+使用上下文相关词向量的模型均取得了当前最优的性能。
+
+很多自然语言处理任务依赖包括分词、词性标注、命名实体识别、句法分析在内的
+句子级语言分析。
+优化语言分析有助于提高自然语言处理的性能。
+近年来，基于神经网络的语言分析算法在静态词向量的帮助下
+取得了较大的性能提升。
+但上下文相关词向量对语言分析的作用仍有待探索。
+
+基于上下文相关词向量与句子级语言分析技术的进展，
+本文围绕两者的结合开展一系列的研究，
+本文研究主要包括以下几方面：
+
+1. \textbf{面向语言分析的上下文相关词向量}：
+针对现有上下文相关词向量使用多层网络对
+一整句甚至多句进行建模而导致的效率问题，
+本文从语言分析主要依赖局部信息的角度出发，
+提出一种融合相对位置权重的窗口级自注意力机制
+并将其应用于上下文表示，从而获得一种适用于语言分析的上下文相关词向量。
+五项词法句法任务的实验结果表明，
+由于使用局部模型替代全局模型，
+本文提出的上下文相关词向量在
+不损失精度的情况下获得了三倍的速度提升。
+
+2. \textbf{基于上下文相关词向量的词法分析模型}：
+针对词法分析中的切分问题（中文分词与命名实体识别）
+对合理的片段（词与实体）表示的依赖，
+本文在上下文相关词向量的基础上
+提出一种基于简单拼接的片段表示方法并
+将其应用于半-马尔科夫条件随机场中。
+典型切分问题的实验结果显示
+本文提出的片段表示有效地提高了模型性能。
+通过进一步融合任务相关的上下文表示以及
+建模片段级信息的片段向量，本文模型取得
+与当前最优模型相近的性能。
+
+3. \textbf{基于上下文相关词向量的句法分析模型}：
+针对上下文相关词向量对多国语句法分析作用尚无明确结论的现状，
+本文提出在多国语句法分析中使用上下文相关词向量
+并在大规模树库上验证其有效性。
+本文在获得显著的性能提升的基础上对提升的原因进行了详细的分析。
+实验结果表明，
+性能提升的主要原因是上下文相关词向量
+通过对于未登录词词形的更好的建模
+有效地提升了未登录词的准确率。
+
+4. \textbf{基于知识蒸馏的句法分析加速方法}：
+针对使用上下文相关词向量的句法分析参数过多、运行速度较慢的问题，
+本文提出一种结合探索机制的知识蒸馏算法，
+将基于上下文相关词向量的复杂模型
+蒸馏到不使用相应词向量的简单模型中，
+从而在不显著降低性能的情况下提高句法分析速度。
+实验结果表明，
+本文提出的方法
+在损失少量句法分析准确率的情况下，
+近十倍地提升了速度。
+
+总的来说，本文研究了动态上下文相关词向量及其在句子级语言分析中的应用。
+上下文相关词向量显著地提高了语言分析的性能，
+同时语言分析也为上下文相关词向量提供了新的理解。
+本文研究可以使语言分析技术
+更好地服务其他自然语言处理任务，
+从而推进整个领域的发展。
+
 \end{cabstract}
 
 \begin{eabstract}
-	
+
+Natural language processing (NLP) is an important sub-field of artificial intelligence.
+As the first step of automatic text processing, converting a word into its computer-understandable representation greatly affects the quality of NLP.
+The word vector gives the smallest semantic unit of natural language --- the word a dense vector representation which contains syntactic and semantic information.
+As the basic block of neural-based NLP systems,
+the word vector which is computed according to the distributional hypothesis of words, has brought performance improvement to many natural language processing models.
+To improve the training efficiency, previous work to make static assumptions on word vectors, that is, a word has a unique vector.
+This assumption makes it possible to learn word embeddings on large-scale data, but it also makes it impossible for static word vectors to determine their representations on context, and thus cannot model the ``polysemous words''.
+The contextualized word embedding, as an emerging technique, cancels the static word vector hypothesis and dynamically determines the vector representation of a word on its context.
+Contextualized word embedding has helped improved a range of tasks, including questions and answers, textual implications, and sentiment analysis.
+
+Many NLP tasks rely on sentence-level language analysis including Chinese word segmentation, part-of-speech tagging, named entity recognition, and syntactic parsing.
+Improving the performance of language analysis help improve the performance of natural language processing.
+In recent years, the help of static word embeddings help neural language analysis algorithms 
+to achieve performance improvement.
+However, the role of contextualized word embeddings for language analysis is yet to be explored.
+
+Based on the progress of contextualized word embeddings and language analysis technology, 
+this paper focus on the combination of these two techniques.
+The research of this paper mainly includes the following directions:
+
+1. \textbf{Localized and contextualized word embeddings}:
+Contextualized word embeddings suffer from efficiency problem,
+which is mainly caused by the practice of modeling the global context
+with multiple layers.
+Considering that the sequence labeling problem largely depends on
+the local context, we combine the relative position and the local self-attention
+to represent the context in the contextualized word embeddings.
+Experimental results on five sequence labeling problems show that,
+thanks to the local context representation,
+our model runs three times faster over ELMo without loss of accuracy.
+
+2. \textbf{Lexical analysis with contextualized word embeddings}:
+Properly representing a segment (e.g. word for Chinese word segmentation and entity for named entity recognition)
+is important to the segmentation performance.
+We propose to represent a segment by simply concatenating the input vectors
+and apply this representation to neural semi-CRF.
+Experimental results on a collection of segmentation problems
+show the effectiveness of our method.
+By incorporating additional segment embedding which encodes the entire segment,
+our model achieves comparable performance the state-of-the-art systems.
+
+3. \textbf{Syntactic analysis with contextualized word embeddings}:
+The effect of contextualized word embeddings on universal parsing is yet to know.
+We propose to use the contextualized word embeddings as an additional features
+and show its effectiveness with experiments on extensive treebanks.
+We further explore the reason of performance improvement.
+The analysis shows the improvements
+are resulted from the better out-of-vocabulary word abstraction from
+the contextualized word embeddings
+and such abstraction is achieved by better morphological modeling.
+
+4. \textbf{Distilling knowledge from syntactic parser with contextualized word embeddings}:
+Over-parameterization slows down both the training and testing of the model with contextualized word embeddings.
+We proposed a knowledge distillation method for this kind of search-based structured prediction model,
+which distills a complex predictor into a simple one, thus speeds up the model.
+Our method combines the distillation from reference states and explored state, which shows to
+improve the performance.
+Experimental results show that our method achieves magnitude of speedup with a slight loss of accuracy.
+
+In general, this paper studies contextualized word embeddings and their applications in language analysis.
+contextualized word embeddings significantly improve the performance of linguistic analysis, while linguistic analysis provides a new understanding of contextualized word embeddings.
+This paper can make language analysis techniques better serve the downstream tasks of natural language processing, thus promoting the development of the entire field.
+
 %   An abstract of a dissertation is a summary and extraction of research work
 %   and contributions. Included in an abstract should be description of research
 %   topic and research objective, brief introduction to methodology and research

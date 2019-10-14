@@ -1,17 +1,53 @@
+% symbol:
+\newcommand{\nsymbols}{\left(x_1, \dots, x_n\right)}
+\newcommand{\symbolvec}{\mathbf{v}}
+\newcommand{\nsymbolvecs}{\left(\symbolvec_1, \dots, \symbolvec_n\right)}
+
+\newcommand{\nwords}{\left(w_1, \dots, w_n\right)}
+\newcommand{\nchars}{\left(c_1, \dots, c_n\right)}
+\newcommand{\wordvec}{\mathbf{v}}
+\newcommand{\nwordvecs}{\left(\wordvec_1, \dots, \wordvec_n\right)}
+
+\newcommand{\symbolvocab}{\mathcal{X}}
+\newcommand{\wordvocab}{\mathcal{W}}
+
+\newcommand{\mlpfn}[1]{\text{linear}\left( #1 \right)}
+\newcommand{\mlpfnp}[1]{\text{linear}^*\left( #1 \right)}
+\newcommand{\mlpfnpp}[1]{\text{linear}^{'}\left( #1 \right)}
+\newcommand{\highwayfun}[1]{\highway\left(#1\right)}
+\newcommand{\softmaxfn}[2]{\softmax_{#1}{\left(#2\right)}}
+
+\newcommand{\genericcontextfunc}{\mathcal{F}_{c}}
+\newcommand{\genericforwardcontextfunc}{\overrightarrow{\mathcal{F}_{c}}}
+\newcommand{\genericbackwardcontextfunc}{\overleftarrow{\mathcal{F}_{c}}}
+\newcommand{\genericpredictfunc}{\mathcal{F}_{p}}
+\newcommand{\genericwordvecfunc}{\phi}
+\newcommand{\genericparams}{\mathbf{\Theta}}
+
+\newcommand{\elmochinesetranslation}{\text{基于语言模型的上下文相关词向量}}
+\newcommand{\finetunechinesetranslation}{\text{精调参数}}
 \begin{denotation}
 
-为了更一致地描述上下文相关词向量以及基础自然语言处理相关的技术，
-全文的符号系统统一如下：
+为了更一致地描述上下文相关词向量及其在句子级语言分析中的应用，
+本文的符号系统统一如下：
 
 \begin{itemize}
-\item 长度为$n$的广义符号序列：$\ninputs$；
-\item 包含$n$个词的句子：$\nwords$；
+\item 广义符号：$x$，对应的词表$\symbolvocab$，广义符号包含字、词等；
+\item 广义符号的向量：$\symbolvec$；
+\item 长度为$n$的广义符号序列：$\nsymbols$，其对应的向量序列：$\nsymbolvecs$；
+\item 包含$n$个词的句子：$\nwords$，对应的词向量序列采用与广义符号向量相同的方法定义$\nwordvecs$；
 \item 包含$n$个字的词：$\nchars$；
-\item 一个词的向量：$\wordvec$；
-\item 包含$n$个词的词向量序列：$\nwordvecs$；
-\item 对于$x_t$大小为$2m$的窗口：特指以$x_t$为中心，左右各含$m$个词的序列$x_{t-m}, ..., x_t, ..., x_{t+m}$；
-\item 对于$x_t$大小为$m$的窗口：特指以$x_t$为中心，左侧含有$m$个词的序列$x_{t-m}, ..., x_t$；
-\item 词表：$\vocabulary$；
+\item 广义参数：$\genericparams$；
+\item 广义静态词向量函数：$\genericwordvecfunc: \symbolvocab \mapsto \mathbf{R}^d$，将一个词映射为对应的$d$-维向量表示；
+\item 广义上下文相关词向量函数：$\genericcontextfunc: \mathbf{R}^{n \times d} \mapsto \mathbf{R}^{n \times d'}$，将$n$个$d$维向量的序列输入；
+%\item 一个词的向量：$\wordvec$；
+%\item 对于$x_t$大小为$2m$的窗口：特指以$x_t$为中心，左右各含$m$个词的序列$x_{t-m}, ..., x_t, ..., x_{t+m}$；
+%\item 对于$x_t$大小为$m$的窗口：特指以$x_t$为中心，左侧含有$m$个词的序列$x_{t-m}, ..., x_t$；
+%\item 词表：$\vocabulary$；
+\item 线性变换函数：$\mlpfn{\mathbf{x}} = W \mathbf{x} + b$ ；
+%\item 高速公路网络：$\highwayfun{\mathbf{x}} = \mlpfn{\mathbf{x}}$；
+\item softmax函数：$\softmax_{s'}{(s)} = \frac{1}{Z} \exp \left(s\right)$，其中$Z=\sum_{s'} \exp \left(s'\right)$；
+
 \end{itemize}
 
 \end{denotation}

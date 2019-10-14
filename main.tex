@@ -74,11 +74,10 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \usepackage{hithesis}
-\usepackage{arydshln}
+%\usepackage{arydshln}
 \usepackage{bbm}
 \usepackage{tikz}
 \usetikzlibrary{shapes,arrows,shadows}
-\usepackage{longtable}
 \pgfdeclarelayer{background}
 \pgfdeclarelayer{foreground}
 \pgfsetlayers{background,main,foreground}
@@ -89,19 +88,24 @@
 \newcommand{\tabitem}{~~\llap{\textbullet}~~}
 \DeclareMathOperator*{\argmin}{argmin}
 \DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator*{\softmax}{softmax}
+\DeclareMathOperator*{\mlp}{MLP}
+\DeclareMathOperator*{\highway}{Highway}
+\DeclareMathOperator*{\elmo}{ELMo}
 
-\newcommand{\ninputs}{\left(x_1, \dots, x_n\right)}
-\newcommand{\nwords}{\left(w_1, \dots, w_n\right)}
-\newcommand{\nchars}{\left(c_1, \dots, c_n\right)}
-\newcommand{\wordvec}{\mathbf{v}}
-\newcommand{\nwordvecs}{\left(\mathbf{v}_1, \dots, \mathbf{v}_n\right)}
-\newcommand{\vocabulary}{\mathcal{X}}
-
+%\newcommand{\leftctxfn}{\overrightarrow{\mathcal{C}}}
+%\newcommand{\rightctxfn}{\overleftarrow{\mathcal{C}}}
 \newcommand{\elmoleftctxfn}{\overrightarrow{\text{LSTM}}}
 \newcommand{\elmorightctxfn}{\overleftarrow{\text{LSTM}}}
+\newcommand{\ctx}{\mathbf{h}}
+\newcommand{\ctxp}{\mathbf{h}^*}
 \newcommand{\leftctx}{\overrightarrow{\mathbf{h}}}
+\newcommand{\leftctxp}{\overrightarrow{\mathbf{h}^*}}
+\newcommand{\leftctxpp}{\overrightarrow{\mathbf{h}^{'}}}
 \newcommand{\rightctx}{\overleftarrow{\mathbf{h}}}
-\newcommand{\bigv}{\mathbf{\tilde{v}}}
+%\newcommand{\bigv}{\mathbf{\tilde{v}}}
+
+\newcommand{\stdev}[1]{\tiny ($\pm$#1)}
 
 \begin{document}
 
@@ -130,8 +134,8 @@
 %\include{body/format_guidance}
 \include{body/intro}
 \include{body/elmo}
-\include{body/seqlabel}
 \include{body/semicrf}
+\include{body/seqlabel}
 \include{body/distill}
 \backmatter
 %硕博书序
@@ -142,7 +146,7 @@
 %\input{back/appA.tex}
 %\end{appendix}
 \include{back/publications}    % 所发文章
-\include{back/ceindex}    % 索引, 根据自己的情况添加或者不添加，选择自动添加或者手工添加。
+%\include{back/ceindex}    % 索引, 根据自己的情况添加或者不添加，选择自动添加或者手工添加。
 \authorization %授权
 %\authorization[saomiao.pdf] %添加扫描页的命令，与上互斥
 \include{back/acknowledgements} %致谢

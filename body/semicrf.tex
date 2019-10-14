@@ -1,17 +1,18 @@
-\chapter{基于上下文相关的片段表示}[Segmental Representation]\label{chp:semicrf}
+\chapter{基于上下文相关词向量的词法分析}[Lexical Analysis with Contextualized Word Embeddings]\label{chp:semicrf}
 
-\section{简介}[Introduction]
-给定输入序列，\textit{切分}问题是识别子序列并给其分配标签的问题。
-许多自然语言处理（NLP）任务可以建模为切分问题，如命名实体识别\cite{okanohara-EtAl:2006:COLACL}，
-意见提取\cite{yang-cardie:2012:EMNLP-CoNLL}和中文分词\cite{andrew:2006:EMNLP}。
-正确地表示切分中的\textit{片段}对于分段模型的性能至关重要。
+\section{引言}[Introduction]
+\textbf{切分}问题是识别输入序列的子序列并给其分配标签的问题。
+包括命名实体识别\cite{okanohara-EtAl:2006:COLACL}、
+意见提取\cite{yang-cardie:2012:EMNLP-CoNLL}和中文分词\cite{andrew:2006:EMNLP}
+在内的诸多多自然语言处理任务可以建模为切分问题。
+合理地表示切分中的\textbf{片段}对于切分的性能至关重要。
 切分问题可以
 通过给每个输入单元（例如单词或字符）标注一个代表边界的标签
 转换为序列标注问题。
 条件随机场\cite{Lafferty:2001:CRF:645530.655813}等一类序列标注模型
 都可以用来建模这类问题。
-相较序列标注模型，直接建模片段的模型有：
-有效利用片段信息，不受局部标签的级联错误的影响等潜在的优势。
+相较序列标注模型，直接建模片段的模型能够
+有效利用片段信息，不受标签的级联错误的影响。
 半-马尔科夫条件随机场（Semi-Markov CRF，简称semi-CRF，文献\inlinecite{NIPS2005_427}）
 是一种能直接建模片段的模型。
 semi-CRF模型显示地建模了输入序列片段（半-马尔科夫链\footnote{半-马尔科夫链的状态代表输入序列的一个片段形成一个整体单元}）的条件概率。
@@ -20,46 +21,81 @@ semi-CRF模型显示地建模了输入序列片段（半-马尔科夫链\footnot
 然而，为了取得较好的切分性能，传统的semi-CRF模型
 很大程度地依赖专家定义的表示片段的特征。
 近年来，神经网络模型在自然语言处理中取得了很大的成功。
-这些成功的一个关键因素在于：1）神经网络能够建模
-自然语言结构的组合特性；2）神经网络模型可以从
-大规模未标注数据中有效地学习表示。
+神经网络建模自然语言结构的组合特性以及从
+大规模未标注数据中学习表示的能力是
+这些成功的关键。
 在semi-CRF中使用神经网络表示片段
 是一个有趣的研究方向。
 一方面，诸如LSTM\cite{Hochreiter:1997:LSM:1246443.1246450}等网络结构可以
-以组合输入向量表示的方式建模片段的；
-另一方面，诸如Word2vec\cite{DBLP:journals/corr/MikolovSCCD13}
-一类的词向量算法可以从大规模未标注数据中将一个片段作为整体从而学习其表示。
+通过组合输入向量的方式建模片段的；
+另一方面，诸如Word2vec\cite{NIPS2013_5021}
+一类的词向量算法可以从大规模未标注数据中学习片段的整体表示。
 
-本文将神经网络模型与semi-CRF进行结合，并且系统地研究了semi-CRF中
+%在使用神经网络表示片段这方面，
+%Kong等人在2015年的文献
+%\inlinecite{DBLP:journals/corr/KongDS15}中提出
+%\textit{用于片段表示的循环神经网络}（segmental recurrent neural network，SRNN）。
+%其模型使用RNN将进行上下文表示后的输入组合成片段表示。
+%Zhuo等人在2016年的文献\inlinecite{zhuo-EtAl:2016:P16-1}
+%中参考了他们的工作并提出使用\textit{递归神经网}（recursive neural network，grRecNN）
+%进行片段表示。
+%然而，这一系列工作的重心都放在如何进行输入组合。
+%诸如：\textit{SRNN中的上下文表示是否必要？}
+%\textit{SRNN与grRecNN哪种更准确高效，是否存在其他网络建模片段？}
+%的问题仍有待回答。
+%更重要的是，
+%上述工作只关注如何将输入向量组合成片段表示，
+%并没有关注如何将片段整体进行表示并用作计算。
+
+在使用神经网络表示片段这方面，
+前人工作\cite{DBLP:journals/corr/KongDS15,zhuo-EtAl:2016:P16-1}
+主要探索了使用不同网络将输入向量组合为片段表示，
+并未对影响模型性能的关键部分进行探索，也没有关注如何将片段整体进行表示并用作计算。
+本章将神经网络模型与semi-CRF进行结合，并且系统地研究了semi-CRF中
 使用神经网络表示片段的问题。
-Kong等人在2016年的文献\inlinecite{DBLP:journals/corr/KongDS15}
-首次提出了\textit{片段循环神经网络}（Segmental RNN，简称SRNN）。
-他们的模型使用RNN将输入单元表示组合为片段表示。
-参考文献\inlinecite{DBLP:journals/corr/KongDS15}，
-本文在组合输入表示方面研究了RNN之外的替代网络。
-同时，本文也研究了如何从生文本中学习一个片段整体的表示。
-本文在两个典型切分问题---命名实体识别（NER）与中文分词（CWS）
+本章研究了
+对于输入进行上下文表示的作用，
+同时本章研究了多种组合方式
+以及
+如何从生文本中学习一个片段整体的表示。
+本章在一组典型切分问题 --- 组块识别（chunking）、命名实体识别（NER）与中文分词（CWS）
 上进行了实验。
-结果表明，简单的输入的拼接可以获得与RNN相似的组合输入单元的能力
-并取得了类似的准确率。
-但在速度放没放，拼接网络1.7倍快于RNN，具有速度优势。
-同时，本文的实验也表明，从大规模未标注数据中学习的片段表示
-能够有效提高基于神经网络的semi-CRF模型的性能。
-在命名实体识别实验中，本文的基于神经网络的semi-CRF
-模型获超出基线系统0.7 F值。
-在中文分词实验中，
-本文模型在三个数据集上获得了平均2.0 F值的提升。
-在PKU与MSR两个数据集上，本文模型的准确率为95.67\%
-与97.58\%，为当时最好的结果。\footnote{本文代码开源在：\url{https://github.com/ExpResults/segrep-for-nn-semicrf}。}
+结果表明，
+建模上下文对于模型的最终性能有显著影响。
+本章提出的输入拼接可以获得与SRNN相似的性能，并三倍地提升解码速度。
+这一系列使用semi-CRF的模型都好于序列标注和CRF模型，可见建模片段的有效性。
 
-\yjcomment{talk about elmo.}
+在此基础上，本章提出使用上下文相关词向量
+分别代替
+输入向量以及进行上下文表示后的向量
+以讨论上下文相关词向量能否通过直接的简单组合进行片段表示。
+结果表明，
+上下文相关词向量可以通过简单组合取得相较对静态词向量进行上下文表示模型更好的性能，
+然而在上下文相关词向量的基础上进一步进行任务相关的上下文表示可以带来更大的提升。
+同时，本章使用上下文相关词向量的semi-CRF相对序列标注模型取得13.15\%的相对错误率降低，
+进一步证明了建模片段的有效性。
+
+本章的主要贡献包括：
+\begin{itemize}
+	\item 本章全面地研究了在semi-CRF中使用神经网络表示片段的问题。
+	本章研究了多种通过输入单元表示片段的方法以及将片段整体进行表示的方法（\S\ref{sec:semicrf:comp}）。
+	这种方法给模型带来稳定的性能提升（\S\ref{sec:semicrf:seg-rep}）。
+	\item 本章对semi-CRF进行了充分的实验（\S\ref{sec:semicrf:exp}）。
+	这些实验研究了上下文表示以及片段表示对于模型性能的影响。
+	本章提出的模型相对当前最优的序列标注模型取得了显著的性能提升。
+	\item 本章以semi-CRF为工具研究了使用上下文相关词向量
+	组合表示片段能力（\S\ref{sec:semicrf:cove}），并经验性地验证上下文词向量的组合能力以及在
+	其基础上加入任务相关上下文表示的有效性。
+\end{itemize}
+
+本章代码开源于：\url{https://github.com/Oneplus/semiCRF}.
 
 \section{问题定义}[Problem Definition]
 \begin{figure}[t]
 	\centering
-	\includegraphics[width=0.7\columnwidth,trim={0cm 0.4cm 7.8cm 12cm},clip]{semicrf/necws}
-	\caption{Examples for named entity recognition (above) and Chinese word segmentation (below).}
-	\label{fig:semicrf:ne-and-cws}
+	\includegraphics[width=0.6\columnwidth,trim=0 0 16.5cm 11.5cm,clip]{semicrf/example}
+	\bicaption{}{命名实体识别（上图）与中文分词模型（下图）的例子。}
+	{Fig. $\!$}{Examples for named entity recognition (above) and Chinese word segmentation (below).\label{fig:semicrf:ne-and-cws}}
 \end{figure}
 
 图\ref{fig:semicrf:ne-and-cws} 
@@ -73,47 +109,39 @@ Kong等人在2016年的文献\inlinecite{DBLP:journals/corr/KongDS15}
 这些列子中，切分任务接受一个输入序列，并将其切分为若干不相交的子序列。
 
 切分问题可以形式化地定义为，给定长度为
-$|\mathbf{x}|$的输入序列$\mathbf{x}=( x_1, .., x_{|\mathbf{x}|} )$。
-定义$x_{a:b}$代表$\mathbf{x}$的子片段$(x_a,...,x_b)$。
+$n$的输入序列$\mathbf{x}=( x_1, \dots, x_{n} )$。
+定义$x_{a:b}$代表$\mathbf{x}$的子片段$(x_a, \dots,x_b)$。
 $\mathbf{x}$的\textit{片段}可以定义为一个三元组$(u, v, y)$。
 这个三元组代表子序列$x_{u:v}$被标注为$y$标签。
-输入$\mathbf{x}$的\textit{切分}是$\mathbf{x}$的片段序列$\mathbf{s} = (s_1,..,s_p)$。
+输入$\mathbf{x}$的\textit{切分}是$\mathbf{x}$的片段序列$\mathbf{s} = (s_1, \dots, s_p)$。
 其中，连续两个片段相邻接，即当$s_j=(u_j,v_j,y_j)$时，$u_{j+1}=v_j+1$。
 对于给定输入句子$\mathbf{x}$，
 切分问题可以定义为找到$\mathbf{x}$最可能的片段序列$\mathbf{s}$的问题。
 
-\section{基于神经网络的半-马尔科夫条件随机场模型}[Neural Semi-Markov CRF]
+\section{基于半-马尔科夫条件随机场的词法分析}[Neural Semi-Markov CRF]
 \begin{figure}[t]
-	\begin{minipage}{\textwidth}
-		\subfigure{\label{fig:semicrf:std}}\addtocounter{subfigure}{-1}
-		\subfigure[semi-CRF]{\includegraphics[width=0.49\columnwidth,trim={3cm 2.8cm 5cm 5cm},clip]{semicrf/std}}
-		\subfigure{\label{fig:semicrf:srnn}}\addtocounter{subfigure}{-1}
-		\subfigure[SRNN]{\includegraphics[width=0.49\columnwidth,trim={3cm 2.8cm 5cm 3.9cm},clip]{semicrf/rnn}}
-	\end{minipage}
-	\begin{minipage}{\textwidth}
-		\subfigure{\label{fig:semicrf:scnn}}\addtocounter{subfigure}{-1}		
-		\subfigure[SCNN]{\includegraphics[width=0.49\columnwidth,trim={3cm 2.8cm 5cm 3.9cm},clip]{semicrf/cnn}}
-		\subfigure{\label{fig:semicrf:sconcate}}\addtocounter{subfigure}{-1}		
-		\subfigure[SCONCATE]{\includegraphics[width=0.49\columnwidth,trim={3cm 2.8cm 5cm 3.9cm},clip]{semicrf/concate}}
-	\end{minipage}
-	\caption{An illustration for the semi-CRF, SRNN, SCNN and SCONCATE.
-		In these figures, circles represent the inputs, blue rectangles represent {\it factors} in graphic model and yellow rectangles represent generic nodes in the neural network model.}
-	\label{fig:semi-crf-vs-srnn}
+	\includegraphics[width=\textwidth,trim=0 0 0 5cm,clip]{semicrf/figure}
+	\bicaption{}{本章提出的融合输入组合函数与片段表示的semi-CRF模型。
+	同时，改图显示了本章研究的输入组合函数 --- 
+	SRNN、grRecNN、SAve、SCNN、SConcat以及SMinus。}
+	{Fig. $\!$}{An illustration for the framework of our neural semi-CRF model,
+		along with the composition functions: SRNN, grRecNN, and our
+		SAve (Eq. \ref{eq:semicrf:save}), SCNN (Eq. \ref{eq:semicrf:scnn}),
+		SConcat (Eq \ref{eq:semicrf:sconcat}) and SMinus (Eq. \ref{eq:semicrf:sminus}).
+	\label{fig:semicrf:framework}}
 \end{figure}
 
-半-马尔科夫条件随机场模型（Semi-Markov CRF，简称semi-CRF，如图\ref{fig:semicrf:std}所示，文献\inlinecite{NIPS2005_427}) 
+半-马尔科夫条件随机场模型（Semi-Markov CRF，简称semi-CRF，如图\ref{fig:semicrf:framework}所示，文献\inlinecite{NIPS2005_427}) 
 是对于给定$\mathbf{x}$产生$\mathbf{s}$的条件概率的一种建模
-\[
-p(\mathbf{s} \mid \mathbf{x})=\frac{1}{Z(\mathbf{x})}\exp\{W \cdot G(\mathbf{x},\mathbf{s})\}\text{。}
-\]
-其中，$G(\mathbf{x},\mathbf{s})$是特征函数。
+\begin{align}
+p(\mathbf{s} \mid \mathbf{x})=\softmaxfn{\mathbf{s'}\in \mathbf{S}}{W \cdot G(\mathbf{x},\mathbf{s})}\text{。}
+\end{align}
+其中，$\mathbf{S}$是所有可能的片段序列，$G(\mathbf{x},\mathbf{s})$是特征函数。
 $G(\mathbf{x}, \mathbf{s})$将输入$\mathbf{x}$与片段序列$\mathbf{s}$
 转化为或稀疏或稠密的向量表示。
 $W$是对应的权重向量。
 通过$W \cdot G(\mathbf{x},\mathbf{s})$，输入$\mathbf{x}$与片段序列$\mathbf{s}$
 共同出现的可能性得到计算。
-$Z(\mathbf{x})=\sum_{\mathbf{s'}\in \mathbf{S}} \exp\{W \cdot G(\mathbf{x}, \mathbf{s'})\}$
-是对于$\mathbf{x}$的所有可能的片段序列$\mathbf{S}$的分数的在指数空间中的加和。
 
 如果限制特征函数
 只关注每个片段自身，而不考虑片段和片段之间的高阶关系，
@@ -126,7 +154,7 @@ $G(\mathbf{x}, \mathbf{s})=\sum_{j=1}^p g(\mathbf{x},s_j)$。
 为以第$j$个词结尾的最优的解码序列。
 同时$\alpha_j$可以采用如下公式递推计算
 \begin{align}\label{eq:semicrf:dp}
-\mathbf{\alpha}_j=\max_{l=1..L,y} \Psi(j-l,j,y) + \mathbf{\alpha}_{j-l-1}\text{。}
+\mathbf{\alpha}_j=\max_{l=1\dots L,y} \Psi(j-l,j,y) + \mathbf{\alpha}_{j-l-1}\text{。}
 \end{align}
 其中$L$是一个人工定义的片段的最大长度。
 $\Psi(j-l,j,y)$是代表形成片段$s=(j-l,j,y)$
@@ -142,466 +170,1180 @@ $\Psi(j-l,j,y)$可以通过$\Psi(j-l,j,y)=W\cdot g(\mathbf{x}, s)$计算。
 
 Kong等人在文献\inlinecite{DBLP:journals/corr/KongDS15}
 中提出使用RNN将输入单元的向量组合成
-片段表示的片段循环神经网络模型（SRNN，模型结构参考图\ref{fig:semicrf:srnn}）。
+片段表示的片段循环神经网络模型（SRNN，模型结构参考图\ref{fig:semicrf:framework}）。
 文献\inlinecite{DBLP:journals/corr/KongDS15}首次
 将semi-CRF与神经网络进行了结合。
 SRNN模型使用双向LSTM建模$g(\mathbf{x}, s)$。
 SRNN首先用一个双向LSTM对于输入序列$\mathbf{x}$的上下文进行建模，
 并将BiLSTM的每个位置的隐层输出作为对应词的表示$\mathbf{h}$。
 对于一个片段$s_j=(u_j,v_j,y_j)$，
-其输入单元子序列$(x_{u_j}, ..., x_{v_j})$的隐层表示$(\mathbf{h}_i, ..., \mathbf{h}_{v_j})$
+其输入单元子序列$(x_{u_j}, \dots, x_{v_j})$的隐层表示$(\mathbf{h}_{u_{j}}, \dots, \mathbf{h}_{v_j})$
 接下来输入另一个双向LSTM，并取出前向LSTM的最后一个隐层输出和后向LSTM的第一个输出
 拼接通过非线性激活函数ReLU最终获得$g(\mathbf{x}, s)$。
 Kong等人\cite{DBLP:journals/corr/KongDS15}率先研究了semi-CRF与神经网络的结合。
 双向LSTM可以看做是一种``神经网络化''的\textit{输入单元级}特征。
-然而，Kong等人的工作仅对使用RNN建模片段进行了探索，忽略了其他潜在的网络结构。
+Zhuo等人在2016年的文献\inlinecite{zhuo-EtAl:2016:P16-1}
+提出另一种网络结构 --- 带门控的递归网络（gated recursive neural network，简称grRecNN，参考图\ref{fig:semicrf:framework}）。
+这种网络递归地将输入归纳为表示。
+
+Kong等人的工作以及Zhuo等人的工作
+都显示合理的片段表示能够提高分割任务的性能。
+然而，他们的工作仅对使用RNN建模片段进行了探索，忽略了其他潜在的网络结构。
 除此之外，
-前人研究证明片段级的特征在semi-CRF中非常有效，但Kong等人并没有有对这类特征进行探索。
+前人研究证明片段级的特征在semi-CRF中非常有效，
+他们的工作也没有对这类特征进行探索。
+
+\section{半-马尔科夫条件随机场中的片段表示}[Segment Representations for Neural Semi-CRF]
+对于semi-CRF来讲，
+片段表示是影响性能的关键。
+本章从两个角度研究了semi-CRF中的片段表示的问题。
+这两个角度包括：
+1）将片段内的输入单元组合为片段表示；
+2）将片段作为整体通过片段向量的转化为片段表示。
+
+对于采用组合输入单元的片段表示模型，
+其主要包括三个组成部分：
+1）输入表示模块（\S\ref{sec:semicrf:comp:inp}）：
+这一模块将输入$\mathbf{x} = \left(x_1, \dots, x_{n}\right)$
+转换为对应的上下文无关的表示$\nsymbolvecs$；
+2）上下文表示模块（\S\ref{sec:semicrf:comp:cont}）：
+这一模块将上下文无关表示转化
+为上下文相关表示$\left(\ctx_1, \dots, \ctx_{n}\right)$；
+3）片段表示模块（\S\ref{sec:semicrf:comp:nets}）：
+这一模块将一个片段$s=(u, v, y)$
+内的上下文相关表示$(\ctx_u, \dots, \ctx_v)$
+转化为片段表示。
+本章尝试了不同的输入、上下文以及片段表示方式。
+
+对于采用片段向量进行片段表示的算法，
+本章将一个片段$(u, v, y)$在句子中的子串$x_{[u:v]}$
+通过查表的方法获得其向量表示。
+这一方法借鉴了前人词向量的工作\cite{NIPS2013_5021,pennington-socher-manning:2014:EMNLP2014}。
+本章主要研究了如何构造片段以及如何从生语料中学习其向量。
+本章在第\ref{sec:semicrf:seg-rep}节中研究了不同的构造片段的方法。
+
+\subsection{通过输入单元组合网络表示片段}[Alternative Segment Representation via Input Composition]\label{sec:semicrf:comp}
+
+\subsubsection{输入表示}[Input Representation]\label{sec:semicrf:comp:inp}
+词向量是自然语言处理的基础。
+本章将词向量形式化地定义为$\genericwordvecfunc$。
+$\genericwordvecfunc$存储了从词到其向量表示的映射关系。
+
+\subsubsection{上下文表示}[Context Representation]\label{sec:semicrf:comp:cont}
+
+文献\inlinecite{DBLP:journals/corr/KongDS15}与文献\inlinecite{zhuo-EtAl:2016:P16-1}
+的一个主要的区别在于上下文表示方法的不同。
+文献\inlinecite{DBLP:journals/corr/KongDS15}
+采用双向LSTM编码上下文而文献\inlinecite{zhuo-EtAl:2016:P16-1}
+只使用输入表示直接作为上下文表示。
+在基于神经网络的semi-CRF中，两种方法孰优孰劣并没有明确的结论。
+本章分别尝试了两种上下文表示的方法，即使用LSTM的方法
+\begin{align}\label{eq:semicrf:inp:bilstm}
+\left(\ctx_1, \dots, \ctx_{n}\right)=\text{BiLSTM}(\wordvec_1, \dots, \wordvec_{n})\text{。}
+\end{align}
+以及直接使用输入表示作为上下文表示的方法
+\begin{align}\label{eq:semicrf:inp:direct}
+\left(\ctx_1, \dots, \ctx_{n}\right)=(\wordvec_1, \dots, \wordvec_{n})\text{。}
+\end{align}
+
+\subsubsection{基于组合的片段表示}[Segment Composition Networks]\label{sec:semicrf:comp:nets}
+
+在获得上下文表示$\mathbf{e}$后，
+本章使用一个神经网络将片段$(u, v, y)$的表示子序列$(e_u, \dots, e_v)$
+转换为一个固定长度的片段表示。
+由于片段具有变长的特性，
+这种网络需要具备将任意长度输入序列转换为向量的能力。
+文献\inlinecite{DBLP:journals/corr/KongDS15}使用RNN处理输入
+变长的输入数据；
+文献\inlinecite{zhuo-EtAl:2016:P16-1}
+则使用递归神经网络完成类似的工呢（参考图\ref{fig:semicrf:framework}）。
 在接下来的章节中，
-本文将首先研究一系列的RNN的替代网络（\ref{sec:semicrf:alt-inp-rep}）。
-然后，本文研究如何将片段视作一个整体进行表示（\ref{sec:semicrf:seg-rep}）。
+本章提出四种能够处理变长输入的神经网络模型。
 
-\subsection{通过输入单元组合网络表示片段}[Alternative Segment Representation via Input Composition]\label{sec:semicrf:alt-inp-rep}
+\paragraph{片段池化网络（Segmental Average，SAve）}
+基于神经网络的词袋模型（Neural Bag-of-Word，简称NBOW，文献\inlinecite{kalchbrenner-grefenstette-blunsom:2014:P14-1}）
+通过将一个变长序列的表示进行加和从而获得这个序列的向量表示。
+Cai与Zhao在2016年的文献\inlinecite{cai-zhao:2016:P16-1}
+中将NBOW应用于中文分词中的词表示并观察到性能的提升。
+本章也尝试了类似的思路。
+具体来讲，本章使用\textit{平均池化网络}表示了片段$s^{(\text{comp})}$，即
+\begin{align}\label{eq:semicrf:save}
+s^{(\text{comp})} = \frac{1}{v - u + 1}\sum_{i=u}^{v} \ctx_i\text{。}
+\end{align}
+本章使用平均池化机制的以期能够缓解
+由于输入数量不同导致的数值范围不同的问题。
 
-\subsubsection{片段卷积网络（Segmental CNN，SCNN）}
-片段的主要特点是其长度不定。
-RNN是建模非定长输入的常用网络结构，但并不是唯一的结构。
-另一类常用的结构是CNN\cite{Collobert:2011:NLP:1953048.2078186}。
-在CNN中，一个过滤器（filter）函数沿着输入方向
-滑动，并将一个固定长度
-窗口内的输入向量转化为一个实数。
-最后通过池化函数（pooling function）将表示一系列上下文
-的实数映射为一个实数。
-通过应用多个关注不同长度的过滤器，CNN可以对输入
-片段的不同长度的上下文进行建模。
-本文使用宽度为1，2，3，4的四类过滤器函数对片段进行建模，
-同时使用最大值池化函数（max-pooling function）将变长的
-输入转化为定长的向量。
-本文将这类模型命名为片段卷积网络（Segmental CNN），
-其结构参考图\ref{fig:semicrf:scnn}。
+\paragraph{片段卷积网络（Segmental Convolutional Neural Network，SCNN）}
+\textit{SAve}中的池化机制会忽略片段内部输入和输入之间的顺序关系。
+但这种位置关系在识别片段时往往是非常重要的。
+卷积神经网络（convolutional neural network，CNN，文献\inlinecite{Collobert:2011:NLP:1953048.2078186}）
+能够编码片段内输入的n-gram信息，所以可以从一定程度上缓解这一问题。
+本章使用时序CNN建模片段。
+时序CNN在输入单元方向上滑动若干卷积函数，
+并使用池化函数对卷积函数收集到的表示进行运算。
+这种方法可以形式化地定义为：
+\begin{align}\label{eq:semicrf:scnn}
+s^{(\text{comp})} = \text{Conv}(\ctx_u, \dots, \ctx_v)\text{。}
+\end{align}
+在实践中，
+在片段内使用卷积函数是非常耗时的。
+本章采用一种折中方案，即在整个句子表示
+上滑动卷积函数，
+但在片段内部进行池化，从而加速了片段表示。
 
-然而，CNN网络的一大特点是对于位置不敏感。
-如果两个不同的片段共享一些相同的输入，CNN可能会给出相同的
-片段表示。
-举一个中文分词的例子。
-对于两个不同的片段``球拍卖''与``拍卖球''
-如果``拍卖''的表示优势出现，
-由于max-pooling function的性质，
-SCNN会给出相同的表示。 
+\paragraph{片段拼接网络（Segmental Concatenation，SConcat）}
+为了能够完整地保留片段内输入的顺序信息，
+本章提出使用拼接网络进行片段表示。
+为了使拼接网络能够建模变长输入，
+本章利用semi-CRF在解码过程中需要设定最大片段长度$L$的特性，
+使用补零（padding）机制将变长输入转换为定长表示。
+这一过程可以形式化地定义为：
+\begin{align}\label{eq:semicrf:sconcat}
+s^{(\text{comp})} = W^{\text{(sconcat)}}(\ctx_u \oplus \dots \oplus \ctx_v \oplus \underbrace{0 \oplus \dots \oplus 0}_{L - (v - u +1) \text{ zeros}})\text{，}
+\end{align}
+其中$\oplus$代表向量拼接。
+$W^{\text{(sconcat)}} \in \mathcal{R}^{(L\times|e|) \times |e|}$将拼接后的向量映射到低维。
+拼接网络可以完整地保留输入顺序信息，
+同时，由于不需要进行矩阵乘法，拼接能够加速这个表示过程。
 
-\subsubsection{片段差值网络（Segmental Difference，SDiff）}
+拼接可以认为是在CNN中使用宽度为$L$的卷积函数。
+因而从保留输入顺序信息的角度，拼接网络与池化网络处于光谱的两段。
 
-除了RNN、CNN，前人工作\yjcomment{citation}证明
-LSTM的隐层输出的差值也可以作为片段的一种表示。
-
-\subsubsection{片段拼接网络（Segmental Concatenation）}
-拼接是一种对于定长输入向量的常见表示方法。
-尽管拼接网络设计的初衷并非解决变长输入的问题，
-但在semi-CRF中，片段的长度往往是有上限的（参考公式\ref{eq:semicrf:dp}）。
-通过补零机制（padding），建模变长的片段的问题可以转化为定长的问题。
-
-同时，拼接网络可以建模输入的相对位置。
-这一性质对于表示片段来讲很重要。
-本文也对这一网络进行了研究，并将其命名为SCONCATE。
-其结构可以参考图\ref{fig:semicrf:sconcate})。
-相较SRNN，SCONCATE从理论上需要更少的矩阵运算，
-因而可以获得片段表示的加速，进而加速解码过程。
+\paragraph{片段差值网络（Segmental Minus，SMinus）}
+对片段头尾表示做差的
+方法在前人句法分析的部分工作\cite{wang-chang:2016:P16-1,cross-huang:2016:EMNLP2016}
+中被证明能够作为上下文的一种表示。
+这种做法在与双向LSTM上下文表示配合使用时效果更加明显。
+Zhou等人在2017年的文献\inlinecite{zhou-EtAl:2017:EMNLP2017}
+中也验证了这一方法在中文分词上的有效性。
+本章参考前人工作，
+并使用头尾差值作为片段表示，即
+\begin{align}\label{eq:semicrf:sminus}
+s^{(\text{comp})} = (\ctx_{u, 1\dots \frac{|\ctx|}{2}-1} - \ctx_{v, 1..\frac{|\ctx|}{2}-1}) \oplus (\ctx_{v, \frac{|\ctx|}{2}\dots |\ctx|} - \ctx_{u, \frac{|\ctx|}{2} \dots |\ctx|})\text{。}
+\end{align}
+公式\ref{eq:semicrf:sminus}中将$\ctx_i$分成两部分的做法
+使得差值网络能够捕捉前后两个方向的上下文表示。
 
 \subsection{通过片段向量表示片段}[Segment Representation via Segment Embeddings]\label{sec:semicrf:seg-rep}
-\begin{figure}[t]
-	\centering
-	\includegraphics[width=0.7\columnwidth,trim={2cm 2.8cm 2cm 3.9cm},clip]{semicrf/with_seg}
-	\caption{Our neural semi-CRF model with segment representation from input composition and segment embeddings.}\label{fig:semicrf:with-seg}
-\end{figure}
 
 对于分割问题，片段作为一个整体时往往比其中的n-gram
 具有更强的表达能力，并且歧义更少。
 在前人关于semi-CRF的工作中，片段级的特征往往能带来性能的提升。
-第 \ref{sec:semicrf:alt-inp-rep}节中的片段表示只建模了输入单元（或者说输入单元的n-gram）。
+第 \ref{sec:semicrf:comp}节中的片段表示只建模了输入单元（或者说输入单元的n-gram）。
 因而，加入片段级的表示（即片段向量）有望进一步提升性能。
 
-本文将片段向量视作一种与词向量类似的模块。
+本章将片段向量视作一种与词向量类似的模块。
 模型将整个片段作为键值输入查找表，获得对应的片段向量。
-在获得片段向量后，本文将其与第\ref{sec:semicrf:alt-inp-rep}节获得
-的基于输入单元组合的片段向量拼接在一起，形成完整的片段表示（如图\ref{fig:semicrf:with-seg}所示）。
-然而，由于片段并非天然存在，如何获得片段向量是一个有难度的问题。
+本章将片段$s=(u, v, y)$的片段向量形式化地定义为：
+\begin{align}
+s^{(\text{emb})} = \phi^{\text{(seg)}}(x_{[u:v]})\text{。}
+\end{align}
+其中$\phi^{\text{(seg)}}$是片段向量表。
 
-%\subsubsection{Segment Embedding from Training Data}
-最简单的获得片段向量的方法是将训练数据中出现
-的正确的片段加入查找表。
-然而这种做法会使一个片段是否在查找表中
-成为这个片段是否是正确切分的一个强线索，进而导致模型过拟合到训练数据。
-过拟合问题可以从两个角度进行解决，
-其中之一是使用预训练的片段向量\cite{Erhan:2010:WUP:1756006.1756025}；
-另一种是扩大查找表大小。
+在获得片段向量后，本章尝试两种使用方法：
+1）使用片段向量作为唯一片段标识；
+2）将其与第\ref{sec:semicrf:comp}节获得
+的基于输入单元组合的片段向量拼接在一起，形成片段表示。
+片段表示的作用可以类比一系列基于词典的切分模型。
+这类模型的一大特点是词典的质量影响模型的性能。
+由于切分的一个目标是识别片段边界，
+而一个片段在片段向量表中这一事实
+将为识别其边界的非常强的线索。
+所以只从训练数据中构建词典有非常大的过拟合的风险。
 
-Word embedding gains a lot of research interest in recent years \cite{DBLP:journals/corr/MikolovSCCD13} and is mainly carried on English texts which are naturally segmented.
-Different from the word embedding works, our segment embedding requires large-scale segmented data, which cannot be directly obtained.
-Following \cite{wang-EtAl:2011:IJCNLP-2011} which utilize automatically segmented data to enhance their model, we obtain the auto-segmented data with our neural semi-CRF baselines (SRNN, SCNN, and SCONCATE) and use the auto-segmented data to learn our segment embeddings.
+一个理想的查找表在尽可能包含正确切分的情况下，
+也应包含足够多的错误的片段，
+从而防止过拟合训练数据。
+本章提出了两种查找表的构建方法。
+其中一个方法是\textit{从训练数据中构建}查找表。
+这种方法除了包含正确片段，
+也包含训练数据中的高频的错误片段。\footnote{本章的``错误片段''指的是边界错误的片段。}
+另一种方法是\textit{从生语料中构建}查找表。
+这种方法使用基线模型分析大规模生语料，然后根据自动分析结果构建查找表。
 
-Another line of research shows that machine learning algorithms can be boosted by ensembling {\it heterogeneous} models.
-Our neural semi-CRF model can take knowledge from heterogeneous models by using the segment embeddings learned on the data segmented by the heterogeneous models.
-In this paper, we also obtain the auto-segmented data from a conventional CRF model which utilizes hand-crafted sparse features.
-Once obtaining the auto-segmented data, we learn the segment embeddings in the same with word embeddings.
+第二种构建查找表的方法可以追溯到使用
+使用自动分析结果提到模型性能的半监督学习算法中\cite{chen-EtAl:2009:EMNLP,wang-EtAl:2011:IJCNLP-2011}。
+这一方法的主要动机是使模型能够同时
+考虑正确的片段以及根据模型产生的最可能出错的片段。
 
-\begin{figure}[t]
-	\centering
-	\includegraphics[width=0.8\columnwidth,trim={0cm 0cm 3.5cm 11.2cm},clip]{semicrf/tran}
-	\caption{An example for fine-tuning decreases the generalization power of pre-trained segment embedding.
-		``1994\_World\_Cup'' does not occur in the training data and its similarity with ``1998\_World\_Cup'' is broken because ``1998\_World\_Cup'' is tuned.}\label{fig:wo-ft}
-\end{figure}
+词向量技术是基于神经网络自然语言处理的基石。
+在本章提出的第二种方法中使用词向量技术，从自动分析结果中预训练片段向量是一种潜在的有效地策略。
+这种预训练的片段向量即可以用作固定特征，也可以用来初始化模型。
+在第二种方法中，
+首先将自动识别出的片段视作一个新的``词''，
+然后使用Word2vec算法在这一语料上预训练片段向量。
+在本章实现中，本章将自动识别出的片段内的词用下划线连接，
+从而获得用以训练上下文相关词向量的新``词''。
+本章关注片段向量在识别边界时的作用，
+因而在学习片段向量时并没有考虑对应标签。
 
-A problem that arises is the fine-tuning of segment embeddings.
-Fine-tuning can learn a task-specific segment embeddings for the segments that occur in the training data, but it breaks their relations with the un-tuned out-of-vocabulary segments.
-Figure \ref{fig:wo-ft} illustrates this problem.
-Since OOV segments can affect the testing performance, we also try learning our model without fine-tuning the segment embeddings.
+\subsection{实现与模型训练细节}[Implementation and Training Details]
 
-\subsection{模型细节}[Model details]
-
-%本文在这一节介绍模型的实现细节。
-
-\subsubsection{输入单元表示$\mathbf{\hat{v}}$}
 \begin{table}[t]
-	\centering
-	\begin{tabular}{r|l}
-		\hline
-		fixed input unit embedding $E^p_i$ size      & 100 \\
-		fine tuned input unit embedding $E^t_i$ size & 32 \\
-		input unit representation $I_i$ size       & 100 \\
-		LSTM hidden layer $H_i$ size            & 100 \\
-		seg-rep via input composition {\sc SComp} & 64 \\
-		seg-rep via segment embedding {\sc SEmb} & 50 \\
-		label embedding $E^Y_{y_i}$ size & 20 \\
-		final segment representation $S_i$ size & 100 \\
-		\hline
+	\bicaption{}{本章超参设置}{Table $\!$}{The hyper-parameter settings\label{tbl:hyper-parameter}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{r|c}
+		\toprule[1.5pt]
+		英文固定输入的维度 $\phi^{(\text{fix})}$ & 300 \\
+		中文固定输入的维度 $\phi^{(\text{fix})}$ & 100 \\
+		可调输入的维度 $\phi^{(\text{tune})}$ & 32 \\
+		ELMo的维度 $\phi^{\text{(ELMo)}}$ & 1,024 \\
+		词性向量的维度 $\phi^{(\text{tag})}$ & 12 \\
+		标签的维度 $\phi^{(\text{label})}$ & 20 \\
+		长度特征的维度 $\phi^{(\text{len})}$ & 4 \\
+		双向LSTM的隐层大小 & 128 \\
+		双向LSTM的层数 (公式\ref{eq:semicrf:inp:bilstm}) & 1 \\
+		SRNN中双向LSTM的层数 & 1 \\
+		最大片段长度 & 10 \\
+		片段向量的维度 $\phi^{(\text{seg})}$ & 50 \\
+		%segment representation $s^{(\text{rep})}$ & 128 \\
+		batch size & 32 \\
+		dropout rate & 0.1 \\
+		\bottomrule[1.5pt]
 	\end{tabular}
-	\caption{Hyper-parameter settings}
-	\label{tbl:semicrf:hyper-parameter}
 \end{table}
 
-Kong等人在文献\inlinecite{DBLP:journals/corr/KongDS15}
-中提出使用双向LSTM建模输入序列。
-除了与文献\inlinecite{DBLP:journals/corr/KongDS15}
-类似的方法，本文也尝试使用输入单元向量自身作为输入。
-为了获得输入单元的向量，本文参考\inlinecite{dyer-EtAl:2015:ACL-IJCNLP}
-并使用两种向量建模输入单元向量。
-其中包括，一个预训练的固定的词向量$\mathbf{p}$
-以及可训练的词向量$\mathbf{w}$。
-两者拼接后输入MLP并通过非线性激活函数最终获得相应输入单元的表示。
-具体来讲，对于第$i$个输入，它的表示$\mathbf{v}_i$可以通过
-\[
-\mathbf{v}_i=\text{ReLU}(W^\mathcal{I} (\mathbf{p}_i \oplus \mathbf{w}_i) + b^\mathcal{I})
-\]
-进行计算。
-求得$(\mathbf{v}_1, ..., \mathbf{v}_n)$后，
-本文分别尝试两种方法获得输入单元的表示。
-第一种方法直接将$\mathbf{v}_i$作为输入单元表示，即$\mathbf{\hat{v}}_i = \mathbf{v}_i$；
-第二种方法与文献\inlinecite{DBLP:journals/corr/KongDS15}类似，
-将$(\mathbf{v}_1, ..., \mathbf{v}_n)$输入到双向LSTM中，
-并将对应的前向隐层输出$\overrightarrow{\mathbf{h}}_i$与后向隐层输出$\overleftarrow{\mathbf{h}}_i$
-拼接后输入MLP与非线性网络
-\[
-\mathbf{\hat{v}}_i=\text{ReLU}(W^\mathcal{H} (\overrightarrow{\mathbf{h}}_i \oplus \overleftarrow{\mathbf{h}}_i)+b^\mathcal{H})
-\]
-获得最终的表示$\mathbf{\hat{v}}_i$。
+\subsubsection{输入表示}[Input Representation]
+为了获得输入表示，
+本章参考文献\inlinecite{dyer-EtAl:2015:ACL-IJCNLP}
+并使用两类词向量 --- 
+固定的预训练词向量$\phi^{\text{(fix)}}$与可调的词向量$\phi^{\text{(tune)}}$
+的拼接作为输入，即：
+\begin{align}\label{eq:detail:inp}
+\phi(x) = \phi^{\text{(fix)}}(x) \oplus \phi^{\text{(tune)}}(x)\text{。}
+\end{align}
+对于包含词性标签的任务 --- 组块识别（chunking）和命名实体识别（NER），
+本章也使用词性向量$\phi^{\text{(tag)}}(\text{POS}(x))$
+作为额外的词表示并将其与公式\ref{eq:detail:inp}的词向量拼接形成最终词向量。
 
-\subsubsection{片段表示$\mathbf{s}$}[Segment Representation]
-给定一个片段$s_j=(u_j,v_j,y_j)$，
-本文定义一个通用函数\text{SComp}$(\mathbf{\hat{v}}_{u_j},..., \mathbf{\hat{v}}_{v_j})$。
-这个通用函数使用第\ref{sec:semicrf:alt-inp-rep}节
-中的网络（SRNN，SCNN，SDiff以及SCONCATE）将片段内的输入单元转化为代表片段的向量$\mathbf{SComp}_j$。
-除了输入单元组合网络，
-本文也尝试使用片段向量捕捉整个片段级的信息，并将其定义为一个通用函数SEmb$(x_{u_j}...x_{v_j})$ 。
-SEmb$(x_{u_j}...x_{v_j})$按照第\ref{sec:semicrf:seg-rep}节描述的方法
-将子序列$(x_{u_j},...,x_{v_j})$作为一个整体查找片段向量的查找表，并获得片段向量$\mathbf{SEmb}$。
-最后，片段$s_j$可以表示为
-\[
-\mathbf{s}_j=\textsc{ReLU}(W^\mathcal{S} (\mathbf{SComp}_j \oplus \mathbf{SEmb}_j \oplus \mathbf{SLab}^{y_j})+b^\mathcal{S})\text{。}
-\]
-其中$\mathbf{SLab}^{y_j}$是标签$y_j$的向量表示。
-表\ref{tbl:semicrf:hyper-parameter}显示了本文模型的超参数。
+在获得了$\phi(x)$后，
+本章使用公式\ref{eq:semicrf:inp:bilstm}与公式\ref{eq:semicrf:inp:direct}
+的方法获得上下文表示。
 
-%Dropout is used at all linear combination functions and input and output of LSTMs as \textcite{DBLP:journals/corr/ZarembaSV14} with rate of 0.5.
-\subsubsection{训练过程}[Training Procedure]
-本文采用对数似然作为学习目标。
-本文参考文献\inlinecite{dyer-EtAl:2015:ACL-IJCNLP}
-并用随机梯度下降（SGD）训练参数。
-SGD的初始化学习率为$\eta_0=0.1$，并逐步衰减。
-在第$i$轮，学习率被更新为$\eta_t=\eta_0/(1+0.1t)$。
+\subsubsection{片段表示}[Segment Representation]
+给定一个片段$s=(u, v, y)$，
+本章将其上下文表示$(e_u, \dots, e_v)$输入到
+片段组合网络（公式\ref{eq:semicrf:save}--\ref{eq:semicrf:sminus}）
+中获得片段表示$s^{(\text{comp})}$。
+同时，本章通过子串$x_{[u: v]}$
+获得片段向量$s^{(\text{emb})}$。
+然后$s^{(\text{comp})}$与$s^{(\text{emb})}$
+或拼接或独立地用作最终片段表示。
+除了$s^{(\text{comp})}$与$s^{(\text{emb})}$，
+两个片段级特征$\phi^{(\text{len})}$与$\phi^{(\text{label})}$
+也被应用于片段表示中。
+其中$\phi^{(\text{len})}$将片段长度转化为向量；
+$\phi^{(\text{label})}$将标签$y$转化为向量。
+最后，本章将全部表示输入包含ReLU激活函数的前馈神经网中获得最后的片段表示，
+即
+\begin{align*}
+s^{(\text{rep})} =& s^{(\text{comp})}(e_u, \dots, e_v) \oplus s^{(\text{emb})}(x_{[u:v]}) \oplus \phi^{(\text{len})}(u - v) \oplus \phi^{(\text{label})}(y) \\
+g(\mathbf{x}, s) =& \text{ReLU}(W s^{(\text{rep})} + b).
+\end{align*}
+
+本章的超参设置如表\ref{tbl:hyper-parameter}所示。
+本章在公式\ref{eq:semicrf:scnn}中使用从1到6共6种宽度的卷积函数。\footnote{对应的数量为32, 32, 32, 16, 8, 8}
+
+本章通过优化训练数据的最大似然学习模型参数，即
+$
+\arg\max_\theta \sum_i \log p(\mathbf{s}_i \mid \mathbf{x}_i )\text{。}
+$
+在训练所有的LSTM模型时，
+本章都是用了recurrent dropout \cite{Gal:2016:TGA:3157096.3157211}
+本章使用默认参数的Adam算法\cite{DBLP:journals/corr/KingmaB14}
+训练模型参数。
 最佳的迭代轮次有开发集性能决定。
 
-\section{实验}[Experiments]
+\section{基于上下文相关词向量的半-马尔科夫条件随机场}[Semi-CRF with Deep Contextualized Embeddings]\label{sec:semicrf:cove}
 
-本文在两个典型的NLP分割任务 --- 命名实体识别和中文分词上进行实验。
+上下文相关词向量\cite{NIPS2017_7209,peters-EtAl:2018:N18-1,P18-1031,gpt1,DBLP:journals/corr/abs-1810-04805}
+也被证明能够有效地提升多种自然语言处理任务的性能。
+本章尝试在半-马尔科夫条件随机场中使用\elmochinesetranslation。
+本文已在第\ref{sec:intro:review:cont-emb}中
+探讨了\elmochinesetranslation
+的建模与参数学习。
+在这一章中，本章按照公式\ref{eq:intro:elmo:pool}
+将上下文相关词向量用作``特征''，
+即固定其模型，只调整公式\ref{eq:intro:elmo:pool}中的$\gamma$与$s_k$。
 
-\subsection{数据集与词向量}[Settings]
+本章从两个角度探讨上下文相关词向量在semi-CRF中的应用。
+其中一种是将其作为上下文表示的替代，即将公式\ref{eq:semicrf:inp:bilstm}替换为
+\begin{align}
+(\ctx_1, \dots, \ctx_n) = \text{ELMo}\nsymbols\text{。}
+\end{align}
+另一种是将其作为输入词向量的替代，即将公式\ref{eq:semicrf:inp:bilstm}替换为
+\begin{align}
+(\ctx_1, \dots, \ctx_n) = \text{BiLSTM}(\text{ELMo}\nsymbols)\text{。}
+\end{align}
+后者可以认为是在通用上下文表示的基础上融入任务相关的上下文表示。
 
-对于命名实体识别实验，本文使用CoNLL03数据集。
+\section{实验}[Experiments]\label{sec:semicrf:exp}
+
+\subsection{任务}[Tasks]
+\begin{table}[t]
+	\bicaption{}{各数据集的标注数据统计}{Table $\!$}{The statistics of labeled data\label{tbl:semicrf:stats}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{lrccccc}
+		\toprule[1.5pt]
+		& & CoNLL00 & CoNLL03 & CTB6 & PKU & MSR \\
+		\midrule[1pt]
+		句子数量 & 训练集 & 8,936 & 14,987 & 23,416 & 17,149 & 78,232 \\
+		& 开发集 & 1,844 & 3,466 & 2,077 & 1,905 & 8,692 \\
+		& 测试集 & 2,012 & 3,684 & 2,796 & 1,944 & 3,985 \\
+		\midrule[0.5pt]
+		词数量& 训练集 & 211.7K & 204.6K & 1,055.5K & 1,662.6K & 3,633.3K \\
+		& 开发集 & 44.4K & 51.6K & 100.3K & 163.9K & 417.1K \\
+		& 测试集 & 47.4K & 46.7K & 134.1K & 172.7K & 184.4K \\
+		\bottomrule[1.5pt]
+	\end{tabular}
+\end{table}
+
+本章在三个典型的NLP切分任务 --- 组块识别、命名实体识别和中文分词上进行实验。
+本章表示数据的统计信息如表\ref{tbl:semicrf:stats}所示。
+
+\paragraph{组块识别}
+对于组块识别实验，
+本章使用CoNLL00数据集\cite{TjongKimSang:2000:ICS:1117601.1117631}进行实验。
+CoNLL00采用华尔街时报（Wall Street Journal data，简称WSJ，文献\inlinecite{Marcus93buildinga}）
+数据后处理获得。
+其中15-18节用作训练数据，
+20节用作测试数据。
+由于原始数据缺少开发集，
+本章利用官方提供的短句结构句法到组块识别的工具\texttt{chunklink.pl}\footnote{\url{https://github.com/esrel/DP/blob/master/bin/chunklink.pl}}
+讲22节转化为组块分析的开发集。
+
+\paragraph{命名实体识别}
+对于命名实体识别实验，本章使用CoNLL03数据集 \cite{TjongKimSang-DeMeulder:2003:CONLL}进行实验。
 该数据集被广泛用于评估NER模型的性能。
-本文采用F-score用作评估指标。相应指标通过CoNLL03 share task的脚本获得。\footnote{本文使用\texttt{conlleval}脚本。}
+本章采用F-score用作评估指标。相应指标通过CoNLL03 share task的脚本获得。\footnote{本章使用\texttt{conlleval}脚本。}
 
+\paragraph{中文分词}
 对于中文分词，
-本文参考前人工作并使用三个简体中文数据集。
+本章参考前人工作并使用三个简体中文数据集。
 这三个数据集包括第二次SIGHAN中文分词评测（the second SIGHAN bakeoff）中的PKU和MSR数据集，以及Chinese Treebank 6.0（CT​​B6）。
-对于PKU和MSR数据集，本文参考文献\inlinecite{pei-ge-chang:2014:P14-1}，并采用训练数据的最后10％作为开发数据。
-对于CTB6数据，本文使用标准方式划分训练、开发和测试数据。
-在预处理中，本文将PKU数据中的所有双字节数字和字母转换为单字节。
-与命名实体识别相同，本文采用F-score评估中文分词性能。\footnote{本文使用第二次SIGHAN中文分词评测提供的\texttt{score}脚本。}
+对于PKU和MSR数据集，本章参考文献\inlinecite{pei-ge-chang:2014:P14-1}，并采用训练数据的最后10％作为开发数据。
+对于CTB6数据，本章使用标准方式划分训练、开发和测试数据。
+在预处理中，本章将PKU数据中的所有双字节数字和字母转换为单字节。
+与命名实体识别相同，本章采用F-score评估中文分词性能。\footnote{本章使用第二次SIGHAN中文分词评测提供的\texttt{score}脚本。}
 
-本文从生语料中学习输入单元向量（对于命名实体识别来讲是词向量，对于中文分词来讲是字向量）和片段向量。
-对于命名实体识别，本文使用RCV1数据\yjcomment{citation}作为未标记的英文数据。
-对于中文分词，本文使用中文gigawords用作未标记的中文数据。
-本文使用文献\inlinecite{ling-EtAl:2015:NAACL-HLT}提出的
-考虑相对距离的skip-gram算法获取输入单元嵌入和段嵌入。\footnote{\texttt{ https://github.com/wlin12/wang2vec}}
+\paragraph{词向量}
+本章使用文献\inlinecite{pennington-socher-manning:2014:EMNLP2014}中
+开源的840B GloVe词向量作为固定的英文词向量。
+本章使用文献\inlinecite{ling-EtAl:2015:NAACL-HLT}开源的
+考虑相对距离的skip-gram工具\footnote{\tt https://github.com/wlin12/wang2vec}在
+Chinese Gigawords Version 5生语料上获得中文字向量。
+
+\paragraph{生语料}
+\begin{table}[t]
+	\bicaption{}{生语料的统计信息}{Table $\!$}{The statistics of unlabeled data\label{tbl:semicrf:unlab-stats}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{lc c}
+		\toprule[1.5pt]
+		& RCV1 & Gigawords-v5 \\
+		\midrule[1pt]
+		句子数量 & 8.18M & 4.82M \\
+		词数量 & 131.22M &  473.73M \\
+		\bottomrule[1.5pt]
+	\end{tabular}
+\end{table}
+
+本章在大规模生语料上按照第\ref{sec:semicrf:seg-rep}节提出的方法获得片段向量。
+对于英文实验，本章使用RCV1作为未标注数据。
+对于中文实验，本章使用Chinese Gigawords Version 5作为未标注数据。
+表\ref{tbl:semicrf:unlab-stats}显示了生语料的统计信息。
+
+文献\inlinecite{reimers-gurevych:2017:EMNLP2017}
+指出神经网络的训练过程是非确定的，
+并且严重依赖于初始化。
+为了控制初始化对于模型性能的影响，
+本章对于所有参数均进行了5组不同随机种子的实验，并报告了实验的均值和方差。
 
 \subsection{基线系统}[Baselines]
-本文将本文提出的模型与三个基线系统进行了对比，
-这三个系统包括：
+本章将本章提出的模型与五个基线系统进行了对比，
+这些系统包括：
 \begin{itemize}
-	\item \textit{基于特征的CRF模型}
-	\item \textit{基于神经网络的分类模型}
-	\item \textit{基于神经网络的CRF模型}
+	\item \textit{Sparse-CRF}：使用人工定义特征的CRF模型；
+	\item \textit{NN-Labeler}：使用神经网络对输入的上下文进行建模并对每个输入独立分类的模型；
+	\item \textit{NN-CRF}：使用神经网络对输入的上下文进行建模并对整个序列采用CRF建模的模型；
+	\item \textit{SRNN}：Kong等人在文献\inlinecite{DBLP:journals/corr/KongDS15}中
+	提出的使用RNN建模片段的基于神经网络的semi-CRF模型。
+	为了公平比较，本章在采用相同的输入表示、上下文表示的前提下重新了他们的模型。
+	\item \textit{grRecNN}：Zhuo等人在文献\inlinecite{zhuo-EtAl:2016:P16-1}中
+	提出的使用递归神经网建模片段的基于神经网络的semi-CRF模型。
+	与SRNN类似，本章也在相同的设置下重现了他们的模型。
 \end{itemize}
 
-对于使用CRF和分类的基线系统，本文使用BIESO标签体系建模分割问题。\footnote {O标签代表无标签片段。由于中文分词不涉及给片段打标签，故在实验中不采用O标签。}
-对于\textit{基于特征的CRF模型}，本文使用文献\inlinecite{guo-EtAl:2014:EMNLP2014}中的基线特征模板建模命名实体识别任务，并使用
-文献\inlinecite{jiang-EtAl:2013:ACL2013}提出的特征模板建模中文分词任务。
-\textit{基于神经网络的分类模型}和\textit{基于神经网络的CRF模型}
-都采用与本文提出的Semi-CRF模型相同的输入单位向量，
+对于使用CRF和分类的基线系统，
+本章使用BIESO标签体系建模分割问题。\footnote {O标签代表无标签片段。由于中文分词不涉及给片段打标签，故在实验中不采用O标签。}
+对于\textit{Sparse-CRF}，
+本章使用文献\inlinecite{guo-EtAl:2014:EMNLP2014}中的基线特征模板建模命名实体识别任务，
+并使用文献\inlinecite{jiang-EtAl:2013:ACL2013}提出的特征模板建模中文分词任务。
+\textit{NN-Labeler}和\textit{NN-CRF}
+都采用与本章提出的Semi-CRF模型相同的输入单位向量，
 但在解码上有所不同，并且没有显示地对片段级信息建模。
 
-\subsection{不同组合函数的对比}
+\subsection{组合函数的对比}[Input Composition Functions]
 \begin{table*}[t]
-	\centering
-	\begin{tabular}{r||cc | cc cc cc| c}
-		\hline
-		 & \multicolumn{2}{c|}{NER}  & \multicolumn{6}{c|}{CWS} & \\
-		 & \multicolumn{2}{c|}{CoNLL03} & \multicolumn{2}{c}{CTB6} & \multicolumn{2}{c}{PKU} & \multicolumn{2}{c|}{MSR} & \\
-		\textit{model} & dev & test & dev & test & dev & test & dev & test & spd \\
-		\hline
-		 \sc NN-Labeler & 93.03 & 88.62 & 93.70 & 93.06 & 93.57 & 92.99 & 93.22 & 93.79 & \bf 3.30 \\
-		 \sc NN-CRF &\bf 93.06 &\bf 89.08 & 94.33 & 93.65 & 94.09 & 93.28 & 93.81 & 94.17 & 2.72 \\
-		 \sc Sparse-CRF & 88.87 & 83.43 &\bf 95.68 &\bf 95.08 &\bf 95.85 &\bf 95.06 &\bf 96.09 &\bf 96.54 & \\
- 		 \hdashline
-		\sc SRNN & 92.97 & 88.63 & 94.56 & 94.06 & 94.86 & 93.91 & 94.38 & 95.21 & 0.62 \\
-		\sc SCONCATE & 92.96 & 89.07 & 94.34 & 93.96 & 94.41 & 93.57 & 94.05 & 94.53 & 1.08 \\
-		\sc SCNN & 91.53 & 87.68 & 87.82 & 87.51 & 79.64 & 80.75 & 85.04 & 85.79 & 1.46 \\
-		SDiff & & & & & & & & & \\
+	\bicaption{}{在使用不同组合函数情况下，组块识别、命名实体识别以及中文分词的对比实验。
+		本章报告了5次实验的均值，$\pm$后的数字表示5次实验结果的标准差。
+		\textit{spd.}代表相对NN-Labeler所需的解码时间的倍数。}
+	{Table $\!$}{The chunking, NER, and CWS results of the baseline models and our neural semi-CRF models with different input composition functions.
+		The number after $\pm$ shows the standard variance.
+		\textit{spd.} represents the inference speed and is evaluated
+		by running time against that of NN-Labeler.
+		\label{tbl:semicrf:close-result}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{l  c  c  c c c  c | r}
+		\toprule[1.5pt]
+		模型 & CoNLL00 & CoNLL03  & CTB6 & PKU & MSR & Ave. & spd. \\
+%		& dev. & test & dev. & test & dev. & test & dev. & test & dev. & test & dev. & test &  \\
+		\midrule[1pt]
+		NN-Labeler  &
+		%94.73 &
+		93.31 \stdev{0.14} & 
+		%92.44 &
+		88.46 \stdev{0.18} & 
+		%93.77 &
+		93.12 \stdev{0.08} & 
+		%93.72 &
+		92.87 \stdev{0.10} & 
+		%95.14 &
+		95.19 \stdev{0.45} & 
+		%93.96 &
+		92.66 & 1.00 \\
+		NN-CRF &
+		%95.26 &
+		93.84 \stdev{0.09} & 
+		%92.92 &
+		88.83 \stdev{0.18} & 
+		%94.26 &
+		93.64 \stdev{0.09} &
+		%94.55 &
+		93.57 \stdev{0.04} &
+		%95.42 &
+		95.47 \stdev{0.07} & 
+		%94.48 &
+		93.15 & 1.66 \\
+		Sparse-CRF & 
+		%95.13 & 
+		93.29 & 
+		%93.06 &
+		83.43 & 
+		%95.68 &
+		\textbf{95.08} &
+		%95.85 &
+		\textbf{95.06} &
+		%95.06 &
+		\textbf{96.54} &
+		%94.96 &
+		92.66 & \\
+		\midrule[0.5pt]
+		\multicolumn{8}{l}{raw embeddings (Eq. \ref{eq:semicrf:inp:direct})} \\
+		\, SRNN & 
+		%94.78 & 
+		93.31 \stdev{0.14} & 
+		%88.94 &
+		83.37 \stdev{0.29} &
+		%94.89 & 
+		94.35 \stdev{0.14} &
+		%\textbf{95.43} & 
+		\textbf{94.26} \stdev{0.07}&
+		%\textbf{96.39} & 
+		\textbf{96.51} \stdev{0.07} &
+		%\textbf{94.08} & 
+		\textbf{92.36} & 14.01\\
+		\, grRecNN & 
+		%94.70 & 
+		\textbf{93.07} \stdev{0.12} &
+		%86.80 &
+		81.64 \stdev{0.42} & 
+		%\textbf{94.96} & 
+		\textbf{94.47} \stdev{0.07} &
+		%95.33 & 
+		94.24 \stdev{0.13} & 
+		%95.87 & 
+		96.10 \stdev{0.08} & 
+		%93.53 & 
+		91.90 & 7.00 \\
+%		\hdashline
+		\, SAve & 
+		%91.73 & 
+		90.15 \stdev{0.24} &
+		%86.95 &
+		81.75 \stdev{0.50} &
+		%92.00 & 
+		91.38 \stdev{0.19} &
+		%90.68 & 
+		90.61 \stdev{0.08} &
+		%91.45 & 
+		92.26 \stdev{0.20} &
+		%90.56 & 
+		89.23 & 2.24 \\
+		\, SCNN  &
+		%\textbf{94.79} & 
+		92.93 \stdev{0.02} & 
+		%\textbf{90.53} & 
+		\textbf{86.07} \stdev{0.85} &
+		%94.24 & 
+		93.90 \stdev{0.07} & 
+		%94.50 & 
+		93.49 \stdev{0.09} & 
+		%95.10 & 
+		95.69 \stdev{0.03} &
+		%93.83 & 
+		92.33 & 12.27 \\
+		\, SConcat &
+		%94.19 & 
+		92.46 \stdev{0.04} & 
+		%88.25 & 
+		82.41 \stdev{0.77} & 
+		%94.86 & 
+		94.22 \stdev{0.14} &
+		%95.08 & 
+		94.12 \stdev{0.11} &
+		%94.06 & 
+		95.78 \stdev{0.05} & 
+		%93.57 & 
+		91.80 & 1.70 \\
+		\, SMinus & 
+		%90.24 & 
+		88.76 \stdev{0.19} &
+		%86.92 & 
+		81.67 \stdev{0.32} &
+		%92.01 & 
+		91.18 \stdev{0.13} &
+		%90.84 & 
+		90.64 \stdev{0.14} &
+		%90.33 & 
+		90.89 \stdev{0.23} &
+		%90.07 & 
+		88.63 & 1.33 \\
+		\midrule[0.5pt]
+		\multicolumn{8}{l}{BiLSTM (Eq. \ref{eq:semicrf:inp:bilstm})} \\
+		\, SRNN  & 
+		%95.78 & 
+		94.25 \stdev{0.06} & 
+		%93.06 & 
+		88.88 \stdev{0.61} & 
+		%94.93 & 
+		94.14 \stdev{0.06} & 
+		%95.36 & 
+		93.91 \stdev{0.11} & 
+		%\textbf{96.00} & 
+		95.98 \stdev{0.10} & 
+		%95.02 & 
+		93.49 & 16.58 \\
+		\, grRecNN  & 
+		%\textbf{95.91} & 
+		\textbf{94.43} \stdev{0.06} &
+		%93.10 & 
+		89.07 \stdev{0.36} &
+		%95.21 & 
+		94.43 \stdev{0.09} &
+		%95.44 & 
+		94.18 \stdev{0.09} & 
+		%95.87 & 
+		95.96 \stdev{0.04} &
+		%95.09 & 
+		\textbf{93.66} & 16.78 \\
+%		\hdashline
+		\, SAve & 
+		%95.33 & 
+		94.11 \stdev{0.20} & 
+		%92.77 & 
+		89.02 \stdev{0.12} & 
+		%94.37 & 
+		93.74 \stdev{0.13} &
+		%94.66 & 
+		93.53 \stdev{0.08} & 
+		%95.26 & 
+		95.39 \stdev{0.10} &
+		%94.48 & 
+		93.20 & 5.19 \\
+		\, SCNN  & 
+		%95.67 & 
+		94.16 \stdev{0.26} & 
+		%93.05 & 
+		\textbf{89.10} \stdev{0.61} &
+		%94.81 & 
+		94.17 \stdev{0.06} &
+		%95.06 & 
+		94.08 \stdev{0.10} &
+		%95.61 & 
+		95.74 \stdev{0.08} &
+		%94.48 & 
+		93.45 & 11.90 \\
+		\, SConcat &
+		%95.85 & 
+		94.31 \stdev{0.07} &
+		%\textbf{93.13} & 
+		88.69 \stdev{0.65} &
+		%\textbf{95.30} & 
+		\textbf{94.62} \stdev{0.05} &
+		%\textbf{95.67} & 
+		\textbf{94.48} \stdev{0.07} &
+		%\textbf{96.00} & 
+		\textbf{96.11} \stdev{0.07} &
+		%\textbf{95.19} & 
+		93.64 & 4.68 \\
+		\, SMinus &
+		%95.31 & 
+		93.87 \stdev{0.17} & 
+		%92.51 & 
+		88.21 \stdev{0.27} & 
+		%94.33 & 
+		93.62 \stdev{0.09} & 
+		%94.48 & 
+		93.55 \stdev{0.10} & 
+		%94.92 & 
+		95.05 \stdev{0.09} & 
+		%94.31 & 
+		92.86 & 3.50 \\
 		\hline
 	\end{tabular}
-	\caption{The NER and CWS results of the baseline models and our neural semi-CRF models with different input composition functions.
-		{\it spd} represents the inference speed and is evaluated by the number of tokens processed per millisecond.}
-	\label{tbl:semi:close-result}
 \end{table*}
-本文讨论的是不同组合函数的表达能力的问题。
-本文比较不同的组合函数对于分割任务的作用，其实验结果如表\ref{tbl:semi:close-result}所示。
-根据表\ref{tbl:semi:close-result}，SRNN和SCONCATE的结果比较接近。
-并且性能优于SCNN。尽管CNN可以对任何长度的输入序列建模，但其与精确位置的不变性可能是表示段的缺陷。实验结果证实了并且显示了正确处理输入位置的重要性。考虑到SCNN的性能相对较差，我们仅在以下实验中研究SRNN和SCONCATE。
 
-%与{\ sc NN-Labeler}相比，结构预测模型（NN-CRF和神经半CRF）通常可以获得更好的性能。根据Table \ref{tbl:close-result}，最佳结构预测模型在NER上优于{\sc NN-Labeler} 0.4 ％，在CWS上平均优于1.11 ％。但神经结构预测模型之间的差异并不显着。 NN-CRF在NER上的性能优于最佳神经半CRF模型（SCONCATE），而SRNN和SCONCATE在三个CWS数据集上的表现优于NN-CRF。
-%我们解决这个问题，或者NN-CRF或神经半CRF仅仅采用输入级信息并且没有充分地将段级信息引入模型中。
 
-对推理速度的进一步比较表明，SCONCATE运行速度比SRNN快1.7倍，
+根据表\ref{tbl:semicrf:close-result}，SRNN和SConcat的结果比较接近。
+并且性能优于SCNN。尽管CNN可以对任何长度的输入序列建模，但其与精确位置的不变性可能是表示段的缺陷。实验结果证实了并且显示了正确处理输入位置的重要性。考虑到SCNN的性能相对较差，我们仅在以下实验中研究SRNN和SConcat。
+
+对推理速度的进一步比较表明，SConcat运行速度比SRNN快1.7倍，
 但比基于神经网络的分类模型以及基于神经网络的CRF模型慢，这是由于时间复杂度的内在差异造成的。
 
-\subsection{不同片段向量的对比}[Comparing Different Segment Embeddings]
+本章首先研究了不同组合函数（第\ref{sec:semicrf:comp}节）在表示片段时的性能。
+本章研究的内容包括，不同的上下文表示以及不同组合函数的对比。
+组块识别、命名实体识别以及中文分词的实验结果如表\ref{tbl:semicrf:close-result}所示。
+表\ref{tbl:semicrf:close-result}的第一个组结果显示了序列标注与CRF模型的结果。
+第二组显示不使用上下文表示（公式\ref{eq:semicrf:inp:direct}）时的模型的性能。
+第三组显示使用双向LSTM进行上下文表示（公式\ref{eq:semicrf:inp:bilstm}）是的模型性能。
+在表\ref{tbl:semicrf:close-result}的各个比较中，
+本章提出的SConcat在使用双向LSTM进行上下文表示时取得了与最优系统（grRecNN）
+几乎一致的性能。
+在比较的几个任务中，
+grRecNN在组块识别中表现最好，SCNN在命名实体识别中表现最好。
+而得益于对ngram特征的表示，Sparse-CRF在分词中表现最好。\footnote{文献\inlinecite{pei-ge-chang:2015:ACL-IJCNLP}
+	提出使用字的bigram作为输入能取得更好的中文分词效果。
+	但是出于模型的统一性，
+	本章仍将字作为输入。}
 
-接下来，本文研究不同的片段表示的效果。
-本文首先用一个基线切分模型在大规模数据上获得自动切分的数据，
-然后在自动切分数据上学习片段向量。
-本文尝试了两类切分模型。
-一类是未使用片段向量的基于神经网络的semi-CRF模型，
-另一类是基于特征的CRF模型。
-为了描述之便，文本使用同构片段向量（SEmb-Homo）
-与异构片段向量（SEmb-Hetero）
-表示从两类模型的自动切分数据中学到的片段向量。
+通过对比本章的第三组中的semi-CRF与NN-CRF，
+本章发现，在除了SMinus之外的设置中，semi-CRF模型的性能都好于linear-chain CRF。
+semi-CRF与linear-chain CRF的最大平均分差异是0.55。
+这一结果显示了在分割问题中建模片段的重要性。
 
-\subsubsection{使用预训练的作用}[Effect of Pre-trained Segment Embeddings]
+通过对比第二组和第三组结果，
+本章发现在semi-CRF中建模上下文的重要性。
+在对比的任务中，
+建模上下文在CoNLL00与CoNLL03上给模型性能带来更大的提升。\footnote{对应的
+	提升为1.36和3.03。
+}
+相比之下，中文分词数据集的提升相对较小\footnote{对应的提升为
+	0.15、0.22以及-0.40。}
+这一观察表明组块识别与命名实体识别对于上下文信息更敏感。
+虽然提升大小随任务不同而不同，
+本章认为在semi-CRF中建模上下文是必要的。
+
+通过对比第三组中不同的片段组合函数，
+本章提出的SConcat的性能只弱于grRecNN平均分0.02。
+更值得关注的是，本章关注的建模顺序的模型（SRNN、grRecNN以及SConcat）
+的效果好于不关注顺序的模型（SAve与SMinus）。
+这一观察表明通过组合输入表示片段的过程中建模顺序的重要性。
+
+本章进一步比较了不同模型的解码速度。
+其中SConcat的速度三倍以上快于SRNN与grRecNN。
+但相对NN-Labeler和NN-CRF仍有差距。
+本章认为这一差距是算法内在复杂度导致的。
+
+考虑到SConcat的准确率与性能的优势，
+本章在后续实验中都使用SConcat作为本章的输入组合函数。
+
+\subsection{片段向量的对比}[Segment Embeddings]
 \begin{figure}[t]
 	\centering
-	\includegraphics[width=\linewidth,trim={0cm 0.4cm 0cm 0.5cm},clip]{semicrf/learn_curve}
-	\caption{Negative log-likelihood (blue lines) and development F-score (red lines) by iterations.
-		Solid lines show the model with randomly initialized segment embeddings.
-		Dashed lines show that initialized with pre-trained.}
-	\label{fig:semicrf:learning-curve}
+	\includegraphics[width=\columnwidth]{semicrf/neg_samples}
+	\bicaption{}{片段查找表中负例的个数与模型性能的关系。左图显示的是CoNLL03的结果，右图显示的是CTB6的结果。}
+	{Fig. $\!$}{The relation between number of negative segments and the model's performances.
+		The left figure plots that for CoNLL03 and the right figure plots that for CTB6.\label{fig:semicrf:neg-seg-vs-perf}}
 \end{figure}
 
-本文首先研究了使用预训练的片段向量的作用。
-本文实验首先尝试只从训练数据中获得片段，
-并随机初始化片段向量。
-本文在SRNN的基础上进行了这一实验，
-然而结果表明这种做法会带来命名实体识别性能的显著下降\footnote{从92.97\%下降到77.5\%。}
-进一步研究表明这种做法会带来严重的过拟合。
-图\ref{fig:semicrf:learning-curve}
-显示了命名实体识别模型的学习曲线。
-根据图\ref{fig:semicrf:learning-curve}，
-使用随机初始化向量的模型在第五轮后
-基本拟合训练数据，
-同时开发集的性能不再增值。
-然而，当使用SEmb-Homo初始化片段向量，
-模型需要更多的轮次拟合训练数据，
-而开发集的准确率提升至93\%。
-上述实验显示了使用预训练的片段向量做初始化的必要性。
+在这一节中，本章研究使用片段向量作为唯一片段表示的问题。
 
-\subsubsection{训练片段向量的作用}[Effect of Fine-tuning Segment Embeddings]
+根据第\ref{sec:semicrf:seg-rep}节，
+片段表示查找表的构建对表示的性能发挥了重要作用。
+本章首先研究了\textit{从训练数据中构建}查找表的效果并经验性地验证了前文的讨论。
+本章在CoNLL03与CTB6上进行了实验并绘制了片段负例的个数与模型性能的关系。
+这一关系见图\ref{fig:semicrf:neg-seg-vs-perf}。
+根据图\ref{fig:semicrf:neg-seg-vs-perf}，
+模型性能随着负例的增加而增加。
+这一观察反映了负例个数与最终结果的关系。
+然而，图\ref{fig:semicrf:neg-seg-vs-perf}
+的结果较差，
+一定程度上表明\textit{从训练数据中构建}查找表
+的方法并不是最优方法。
+有效地构建查找表的方法尚需探索。
 
 \begin{table}[t]
-	\centering
-	\begin{tabular}{r||c|ccc}
-		\hline
-		\it  model & CoNLL03 & CTB6 & PKU & MSR \\
-		\hline
-		SRNN & 92.97 & 94.56 & 94.86 & 94.80 \\
-		\hdashline[1pt/3pt]
-		\sc +SEmb-Homo w/ FT & 92.97 & 95.83 &\bf 96.70 &\bf 97.32 \\
-		\sc +SEmb-Homo w/o FT &\bf 93.14 &\bf 95.91 & 96.64 & 96.59 \\
-		\hline
-		SCONCATE & 92.96 & 94.34 & 94.41 & 94.05 \\
-		\hdashline[1pt/3pt]
-		\sc +SEmb-Homo w/ FT & 93.07 & 95.79 &\bf 96.75 &\bf 97.29 \\
-		\sc +SEmb-Homo w/o FT &\bf 93.36 &\bf 95.88 & 96.50 & 96.44 \\
-		\hline
-		OOV & 46.02 & 5.45 & 5.80 & 2.60 \\
-		\hline
+	\bicaption{}{不同查找表构建方法的以及片段向量用法的对比。}{Table $\!$}{The effect of different segment embeddings,
+		including use them as fixed one,
+		update their weights with and without initialization.
+		\label{tbl:semicrf:segemb}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{l  c  c}
+		\toprule[1.5pt]
+		模型 & CoNLL03 & CTB6\\
+		\midrule[1pt]
+		500K update & 51.37 \stdev{0.38} & 92.13 \stdev{0.11} \\
+		\midrule[0.5pt]
+		\multicolumn{3}{l}{Baseline预训练片段向量 } \\
+		\, 固定& \textbf{74.81} \stdev{0.41} & 91.86 \stdev{0.10}\\
+		\, 初始化并更新 & 73.62 \stdev{0.51} & 93.65 \stdev{0.13}\\
+		\, 不初始化但更新  & 63.54 \stdev{1.54} & 92.96 \stdev{0.08}\\
+		\midrule[0.5pt]
+		\multicolumn{3}{l}{CRF预训练片段向量} \\
+		\, 固定 & 73.38 \stdev{0.14} & 92.05 \stdev{0.25}\\
+		\, 初始化并更新 & 73.03 \stdev{0.41} & \textbf{93.68} \stdev{0.08} \\
+		\, 不初始化但更新 & 62.34 \stdev{0.74} & 93.13 \stdev{0.15} \\
+		\bottomrule[1.5pt]
 	\end{tabular}
-	\caption{Effect of fine-tuning (FT) segment embedding on development data.
-		For CoNLL03 data, a named entity is ``out-of-vocabulary'' when it is not included in the training data as a named entity.}
-	\label{tbl:semicrf:tuning-effect}
 \end{table}
 
-接下来，本文研究了训练片段向量的作用。
-实验的semi-CRF模型使用SEmb-Homo作为片段向量。
-表\ref{tbl:semicrf:tuning-effect}显示了开发集上的实验结果。
-本文发现在命名实体识别中，固定片段向量效果更好。
-在MSR数据集上，训练词向量效果更好。
-进一步的分析发现MSR数据集的未登录词很少，
-所以训练片段向量通过学习数据集相关的向量带来更大的提升。
-然而对于未登录词比例比较高的CoNLL03数据集，
-训练片段向量从一定程度上破坏了预训练的泛化能力。
+接下来，本章研究了\textit{从生语料中构建}查找表。
+根据前文，这种方法首先使用基线模型自动分析大规模生文本，
+并从分析结果中构建片段查找表。
+因而基线模型在这类方法中扮演重要的作用。
+本章尝试使用两种基线模型 --- 基于神经网络的semi-CRF（记为Baseline）以及Sparse-CRF（记为CRF）。
+与前文类似，本章在这里也在CoNLL03和CTB6上进行实验。
+前文也谈及预训练的片段向量的问题。
+本章在这处实验中也分析了预训练的片段向量对模型性能的影响。
+这些分析包括 --- 1）固定预训练片段向量；2）将预训练片段向量作为初始化；3）只使用片段向量查找表。
+其中第三种做法可以与\textit{从训练数据中构建}查找表的方法进行公平对比。
+这一实验结果如表\ref{tbl:semicrf:segemb}所示。
+即使只使用片段向量查找表，本章的从生语料中构建查找表的方法仍取得了优于从训练数据中构造查找表的性能。
+而使用预训练的片段向量能进一步提升性能。
+这一结果显示了本章提出的从生语料中构建查找表的有效性。
 
-\subsubsection{从异构模型输出中学习片段向量的作用}[Effect of Heterogeneous Segment Embeddings]
+表\ref{tbl:semicrf:segemb}也显示了是否需要更新片段向量的对比。
+然而，根据表中所示结果，是否更新片段向量与任务相关。
+CoNLL03上固定向量效果更好，而CTB6更新向量效果更好。
+表\ref{tbl:semicrf:segemb}也显示了不同基线模型的比较。
+结果也没有明显趋势，同时不同的基线性能相差不多。
+这一结果表明本章提出的\textit{从生语料中构建}
+查找表的方法对于产生自动分析数据的方法并不敏感。
 
 \begin{figure}[t]
-	%\centering
-	\includegraphics[width=\linewidth,trim={0cm 0.8cm 0cm 0.5cm},clip]{semicrf/segrep}
-	\caption{Comparison between models with {\sc SEmb-Homo} and {\sc SEmb-Hetero} on development data.
-		The rows show different baseline neural semi-CRF models and the columns show whether fine-tuning (FT) the segment embeddings.}
-	\label{fig:semicrf:bl-vs-crf}
+	\centering
+	\includegraphics[width=0.7\columnwidth, trim=1.5cm 0.5cm 1.5cm 1.5cm, clip]{semicrf/visualization}
+	\bicaption{}{CoNLL03片段向量的可视化结果。片段的颜色代表对应的标签，``NONE''代表错误向量，``MULTI''代表多标签片段。}
+	{Fig. $\!$}{Visualization on the segment embeddings for CoNLL03. 
+		``NONE'' denotes the incorrect segment and ``MULTI'' denotes the segment that is associated with multiple labels in CoNLL03.\label{fig:semicrf:visualization}}
 \end{figure}
-在前面几节中，本文分析了使用同构模型获得的片段向量对于模型的作用。
-本节将讨论异构模型获得的片段向量（SEmb-Hetero）的效果。
-本节实验使用基于特征的CRF作为基线模型获得自动切分的片段。
-图\ref{fig:semicrf:bl-vs-crf}显示了开发集上SEmb-Homo与SEmb-Hetero的结果。
-这一结果表明在开发集上，SEmb-Hetero整体表现好于SEmb-Homo。
-在CoNLL03与MSR数据集上，两个模型的差异是显著的。
-同时，这一结果也表明训练片段向量可以缩小两种模型之间的差异。
 
-\subsubsection{最终结果}
+本章使用t-SNE \cite{maaten2008visualizing}对NER的片段向量进行了可视化。
+其结果如图\ref{fig:semicrf:visualization}所示。
+图\ref{fig:semicrf:visualization}显示片段向量能够从一定程度上刻画片段的标签信息。
+这一观察部分解释了固定片段向量或将其用作初始化能够带来提升的原因。
+然而，图\ref{fig:semicrf:visualization}显示片段表示并不能将错误片段（标记为NONE的片段）
+与正确片段进行有效区分。
+本章认为这一现象的原因是错误片段具有稀疏性，
+因而无法学得合理的片段向量。
+更重要的是，
+Word2vec算法的所基于的分布式假设无法保证将错误片段与正确片段进行合理区分。
+
+\subsection{片段表示组合}[Combination]
+\begin{table}[t]
+	\bicaption{}{使用组合输入与片段向量两种方式结合的实验结果。
+	第一行的错误率降低是相对NN-CRF而言的，第二次错误率降低是相对不使用片段向量的模型而言的。}{Table $\!$}{The results of using both the composition function and segment embeddings.
+		The first error reduction is calculated between the model with segment embeddngs and NN-CRF.
+		The second error reduction is calculated between the model with and without segment embeddngs.
+	\label{tbl:semicrf:combination}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{l c  c  ccc}
+		\toprule[1.5pt]
+		模型 & CoNLL00 & CoNLL03 & CTB6 & PKU & MSR \\
+		\midrule[1pt]
+		\multicolumn{6}{c}{开发集结果} \\
+		\midrule[0.5pt]
+		NN-CRF 
+		& 95.26 & 92.92 & 94.26 & 94.55 & 95.42 \\
+		\midrule[0.5pt]
+		BiLSTM+SConcat 
+		& 95.85 & 93.13 & 95.30 & 95.67 & 96.00 \\
+		%\multicolumn{3}{l}{\, +fixed segment embeddings (Baseline)} & & & \\
+		\quad +固定的片段向量 (Baseline) & 95.86 & 93.52 & 96.05 & 96.83 & 97.07 \\
+		%\multicolumn{3}{l}{\, +fixed segment embeddings (CRF)} & & & \\
+		\quad +固定的片段向量 (CRF) & \textbf{95.86} & 93.52 & 96.12 & 96.98 & 97.46 \\
+		%\multicolumn{3}{l}{\, +update segment embeddings (Baseline)} & & & \\
+		\quad +更新的片段向量 (Baseline) & 95.74 & 93.77 & \textbf{96.22} & \textbf{97.03} & 97.45 \\
+		%\multicolumn{3}{l}{\, +update segment embeddings (CRF)} & & & \\
+		\quad +更新的片段向量 (CRF) & 95.77 & \textbf{93.79} & 96.15 & 97.02 & \textbf{97.70} \\
+		\midrule[0.5pt]
+		\multicolumn{6}{c}{测试集结果} \\
+		\midrule[0.5pt]
+		NN-CRF 
+		& 93.84 & 88.83 & 93.64 & 93.96 & 95.47 \\
+		BiLSTM+SConcat 
+		& 94.31 & 88.69 & 94.62 & 94.48 & 96.11 \\
+		\multicolumn{6}{l}{\, +由开发集结果决定的片段向量} \\
+		& \textbf{94.39} \stdev{0.09} & \textbf{89.87} \stdev{0.41} & \textbf{95.63} \stdev{0.05} & \textbf{95.67} \stdev{0.11} & \textbf{97.52} \stdev{0.07} \\
+%		& \tiny{$\pm$0.09} & \tiny{$\pm$0.41} & \tiny{$\pm$0.05} & \tiny{$\pm$0.11} & \tiny{$\pm$0.07} \\
+		\midrule[0.5pt]
+		Diversity & 27.44 & 10.77 & 6.08 & 4.75 & 3.64 \\
+		错误率降低$^1$  & 8.88\% & 9.27\% & 31.17\% & 28.27\% & 45.21\% \\
+		错误率降低$^2$ & 1.30\% & 10.40\% & 18.61\% & 21.50\% & 36.22\% \\
+		\bottomrule[1.5pt]
+	\end{tabular}
+\end{table}
+
+接下来，本章研究了将输入组合获得的表示与片段向量进行组合从而获得片段表示的效果。
+本章实验结果如表\ref{tbl:semicrf:combination}所示。
+根据表\ref{tbl:semicrf:combination}，
+使用片段向量能够给模型带来显著的性能提升。
+相对NN-CRF基线模型，在多个任务上的平均提升为1.46，平均错误率降低为24.56\%。
+相对于只使用输入组合方式进行片段表示的模型，平均提升与平均错误率降低分别为0.97与17.61\%。
+这一比较现实了建模片段整体的重要性。
+
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=0.7\columnwidth, trim=0 0 0 0.7cm, clip]{semicrf/diver_vs_err}
+	\bicaption{}{片段多样性与相对误差降低之间的关系。}
+	{Fig. $\!$}{The relation between diversity and error reduction.\label{fig:semicrf:diver-vs-err}}
+\end{figure}
+
+除了性能提升，本章从表\ref{tbl:semicrf:combination}也观察到
+片段向量带来的提升是任务相关的。
+片段向量未给组块识别带来显著性能提升，
+但给命名实体识别和中文分词带来了多于一个点的提升。
+本章将这一观察归因为组块识别中需要识别的片段的多样性更高。
+这使得片段向量无法有效地在查找表中召回足够多的片段。
+本章将片段\textit{多样性}定义为如下算式：
+\begin{align}
+\text{Diversity} = \frac{\text{\# of unique segments}}{\text{\# of segments}}\text{。}
+\end{align}
+表\ref{tbl:semicrf:combination}的倒数第三行显示了不同数据集的片段多样性。
+根据表\ref{tbl:semicrf:combination}，CoNLL00数据集的多样性最高。
+本章也绘制了多样性与错误率降低的关系。
+其关系如图\ref{fig:semicrf:diver-vs-err}所示。
+两者的皮尔逊相关系数为$-0.84$，
+这一结果进一步验证了前文的假设。
+
+\begin{table}[!t]
+	\bicaption{}{使用片段向量带来的错误分布的变化。这一实验结果是在CoNLL03上获得的。}{Table $\!$}{The distribution of two types of errors for our model 
+		with and without segment embeddings.
+		The numbers are obtained on the results of multiple runs on CoNLL03.
+	\label{tbl:semicrf:analysis}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{l cc}
+		\toprule[1.5pt]
+		模型 & 边界错误 & 标签错误 \\
+		\midrule[1pt]
+		BiLSTM+SConcat & 354.00 & 285.60 \\
+		\quad +片段表示 & 310.75 & 269.15 \\
+%		\hdashline
+		Error reduction & 12.25\% & 5.76\% \\
+		\bottomrule[1.5pt]
+	\end{tabular}
+\end{table}
+
+由于切分涉及识别边界和并给片段打标签，
+本章将错误分为两类：
+\textit{边界错误}（即边界识别错误）和\textit{标签错误}（即边界识别正确但标签错误）。
+本章研究了使用片段向量的模型在这两个错误中的效果。 
+表\ref{tbl:semicrf:analysis}显示
+相比标签错误，使用片段向量的模型纠正更多的片段错误。
+这一观察结果表明，
+合理地获得片段向量能够以进一步提高性能。
+
+然而，表\ref{tbl:semicrf:analysis}显示：
+使用怎样的基线系统获得片段表示以及是否更新片段向量
+的影响并不明显。
+固定片段向量对于组块识别更有效；
+而更新片段向量对于其他任务更有效。
+只有MSR数据集上的实验显示使用sparse-CRF获得自动分析的片段的有效性。
+
+至此，本章经验性地分析了对于基于神经网络的semi-CRF的
+重要部分。
+根据实验结果，本章得出以下结论：
+\begin{itemize}
+	\item 基于神经网络的semi-CRF模型在大部分切分任务中性能好于linear-chain CRF（参考表\ref{tbl:semicrf:close-result}与\ref{tbl:semicrf:elmo-results}结果）；
+	\item 即使输入表示中编码了通用领域的上下文信息，
+	对于特定任务的上下文进行编码仍是重要的（参考表\ref{tbl:semicrf:close-result}与\ref{tbl:semicrf:elmo-results}结果）；
+	\item 使用片段向量的方法能够有效帮助
+	片段多样性不过大的任务（参考表\ref{tbl:semicrf:segemb}、\ref{tbl:semicrf:combination}以及\ref{tbl:semicrf:elmo-results}结果）。
+\end{itemize}
+
+\subsection{基于上下文相关词向量的半-马尔科夫条件随机场}
+
+通过语言模型学习的上下文相关词向量（Embeddings from Language Model，简称ELMo，\inlinecite{peters-EtAl:2018:N18-1}）
+为多项自然语言处理任务带来了提升。
+本章尝试使用上下文相关词向量作为输入。\footnote{具体来讲，
+	本章将ELMo作为公式\ref{eq:detail:inp}中$\phi^{\text{(fix)}} \oplus \phi^{\text{(tune)}}$的替代。}
+对于英文数据，本章使用文献\inlinecite{peters-EtAl:2018:N18-1}中
+开源的使用\textit{1 Billion Word Benchmark}数据训练的上下文相关词向量作为输入。\footnote{\url{https://allennlp.org/elmo}}
+对于中文字符，本章使用第\ref{chp:elmo}章的ELMo工具在Chinese Gigawords V5上
+训练字级别ELMo。\footnote{\url{https://github.com/HIT-SCIR/ELMoForManyLangs/}}
+本章实验中使用的ELMo的维度为1,024。
+这种表示严重过参数（over-parameterized）因而很容易过拟合到训练数据。
+所以本章在这处实验中将dropout rate调整为0.25。
+\begin{table}[t]
+	\bicaption{}{使用ELMo作为输入的实验结果。最后两行的错误率降低与表\ref{tbl:semicrf:combination}含义相同。}
+	{Table $\!$}{The test results with model using 
+		ELMo as input representation.
+		The first and second error reduction have the same meanings with those of Table \ref{tbl:semicrf:combination}.
+		\label{tbl:semicrf:elmo-results}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{l  c  c  ccc}
+		\toprule[1.5pt]
+		\textit{model} & CoNLL00 & CoNLL03 & CTB6 & PKU & MSR \\
+		\midrule[1pt]
+		NN-CRF 
+		& 96.48 \stdev{0.10} & 91.72 \stdev{0.28} & 95.91 \stdev{0.05} & 95.58 \stdev{0.03} & 96.74 \stdev{0.02} \\
+%		& \tiny{$\pm$0.10} & \tiny{$\pm$0.28} & \tiny{$\pm$0.05} & \tiny{$\pm$0.03} & \tiny{$\pm$ 0.02} \\
+		SConcat & 96.07 \stdev{0.12} & 89.31 \stdev{0.35} & 95.57 \stdev{0.07} & 94.78 \stdev{0.11} & 95.30 \stdev{0.10} \\
+%		& \tiny{$\pm$0.12} & \tiny{$\pm$0.35} & \tiny{$\pm$0.07} & \tiny{$\pm$0.11} & \tiny{$\pm$0.10} \\
+		BiLSTM+SConcat & \textbf{96.60} \stdev{0.06} & 91.84 \stdev{0.07} & 96.11 \stdev{0.12} & 95.39 \stdev{0.05} & 96.75 \stdev{0.05}\\
+%		& \tiny{$\pm$0.06} & \tiny{$\pm$0.07} & \tiny{$\pm$0.12} & \tiny{$\pm$0.05} & \tiny{$\pm$0.05} \\
+		\multicolumn{6}{l}{\, +由表\ref{tbl:semicrf:combination}开发集结果决定的片段表示} \\
+		& 96.58 \stdev{0.09} & \textbf{92.33} \stdev{0.05} & \textbf{96.46} \stdev{0.13} & \textbf{95.97} \stdev{0.08} & \textbf{97.85} \stdev{0.06}\\
+%		& \tiny{$\pm$0.09} & \tiny{$\pm$0.05} & \tiny{$\pm$0.13} & \tiny{$\pm$0.08} & \tiny{$\pm$0.06} \\
+		\midrule[0.5pt]
+		Diversity & 27.44 & 10.77 & 6.08 & 4.75 & 3.64 \\
+		错误率降低$^1$ & 2.73 & 7.36 & 13.23 & 8.94 & 33.92 \\
+		错误率降低$^2$ & -0.67 & 5.91 & 8.81 & 13.12 & 33.81 \\
+		\bottomrule[1.5pt]
+	\end{tabular}
+\end{table}
+
+表\ref{tbl:semicrf:elmo-results}显示了这部分实验结果。
+本章观察到表\ref{tbl:semicrf:elmo-results}与表\ref{tbl:semicrf:combination}的趋势相同，
+即本章semi-CRF模型在5个实验数据集的3个中取得了优于NN-CRF的效果。
+使用片段表示进一步给4个数据集带来性能的提升。
+片段多样性与相对错误率降低的关系也符合图\ref{fig:semicrf:diver-vs-err}的趋势。
+使用片段表示并未给CoNLL00数据集带来显著性能提升。
+本章认为这一现象是由CoNLL00的片段多样性较高造成的。
+
+本章也在表\ref{tbl:semicrf:elmo-results}中比较了
+直接将ELMo用于片段组合的模型（即不在模型中使用BiLSTM表示上下文），
+其结果显示在``SConcat''一列。
+相比表\ref{tbl:semicrf:close-result}，使用ELMo能够给性能带来提升。
+本章认为这一提升源于ELMo在通用领域建模了上下文信息。
+然而，这一结果相较使用任务相关的上下文表示的模型仍有差距。
+这一观察表明进行任务相关的上下文表示的重要性。
+
+根据表\ref{tbl:semicrf:elmo-results}，
+相对NN-CRF，使用片段向量能够带来13.16的平均错误率降低。
+而相对不使用片段向量的模型，平均错误率降低是12.00。
+对应的平均性能绝对值提升为0.55和0.49。
+表\ref{tbl:semicrf:elmo-results}中显示的错误率降低小于表\ref{tbl:semicrf:combination}。
+这一结果表明，输入组合函数与片段向量的作用不是完全正交的。
+在加强输入表示的情况下，片段向量的作用被相对削弱。
+然而，片段向量仍给本章模型带来了性能的提升。
+这一观察显示了本章提出的片段向量的有效性。
 
 \begin{table}[t]
-	\centering
-	\begin{tabular}{r||c |c c c}
-		\hline
-		\it  model & CoNLL03 & CTB6 & PKU & MSR \\
-		\hline
-		\sc NN-labeler & 88.62 & 93.06 & 92.99 & 93.79 \\
-		\sc NN-CRF & 89.08 & 93.65 & 93.28 & 94.17 \\
-		\hline
-		\sc Sparse-CRF & 83.43 & 95.08 & 95.06 & 96.54 \\
-		\hline
-		SRNN &88.63 & 94.06 & 93.91 & 95.21 \\
-		%\sc +SegEmb-BL & 89.05 & 95.30 & 95.56 & 95.65 \\
-		% &\it +0.42 &\it +1.24 &\it +1.75 &\it +0.44\\
-		\sc +SEmb-Hetero & 89.59 &\bf 95.48 & 95.60 & 97.39 \\
-		&\it +0.96 &\it +1.42 &\it +1.69 &\it +2.18 \\
-		\hdashline[1pt/3pt]
-		SCONCATE & 89.07 & 93.96 & 93.57 & 94.53 \\
-		%\sc +SegEmb-BL & 89.60 & 95.39 & 95.67 & 96.83 \\
-		%& & & & \\
-		\sc +SEmb-Hetero & \bf 89.77 & 95.42 &\bf 95.67 &\bf 97.58 \\
-		&\it +0.70 &\it +1.43 &\it +2.10 &\it +3.05 \\
-		\hline
+	\bicaption{}{组块识别的对比结果。$\clubsuit$代表使用多任务学习的系统；
+		$\heartsuit$代表使用半监督学习的系统；
+		$*$的系统与本章系统无法直接比较；
+		$\Diamond$代表结果是多次实验的平均值。
+	}{Table $\!$}{Comparison with the state-of-the-art chunking systems.
+		$\clubsuit$ marks the system that uses multi-task learning.
+		$\heartsuit$ marks the system that uses semi-supervised learning.
+		$*$ marks the result which is not directly comparable due to data split difference.
+		$\Diamond$ marks the result which is obtained from the average of multiple runs.
+		\label{tbl:semicrf:chunk-stoa}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{lc}
+		\toprule[1.5pt]
+		模型 & CoNLL00 \\
+		\midrule[1pt]
+		CVT+Multi-task (Large)$^{\heartsuit\clubsuit\Diamond}$ \cite{clark-EtAl:2018:EMNLP} & \textbf{97.0} \\
+		Flair embeddings$^{\heartsuit\Diamond}$ \cite{akbik-blythe-vollgraf:2018:C18-1} & 96.72 \\
+		TagLM$^{*\heartsuit\Diamond}$ \cite{peters-EtAl:2017:Long} & 96.37 \\
+		LM-LSTM-CRF$^{*\heartsuit\clubsuit\Diamond}$ \cite{Liu2018EmpowerSL} & 95.96 \\
+		JMT$^\clubsuit$ \cite{hashimoto-EtAl:2017:EMNLP2017} & 95.77 \\
+		Low supervision \cite{sogaard-goldberg:2016:P16-2} & 95.57 \\
+		Suzuki and Isozaki (2008)$^\heartsuit$ \cite{suzuki-isozaki:2008:ACLMain} & 95.15 \\
+		grRecNN (reported)$^\heartsuit$ \cite{zhuo-EtAl:2016:P16-1} & 95.10 \\
+		NCRF++ \cite{yang-zhang:2018:Demos} & 95.06 \\
+		\midrule[0.5pt]
+		ours$^{\heartsuit\Diamond}$ & 96.58 \\
+		\bottomrule[1.5pt]
 	\end{tabular}
-	\caption{Comparison between baselines and our neural semi-CRF model with segment embeddings.}
-	\label{tbl:semicrf:seg-result}
+\end{table}
+
+\subsection{与当期最优模型对比}[Comparison with State-of-the-art Systems]
+
+\begin{table}[t]
+	\bicaption{}{命名实体识别的对比结果。$\clubsuit$、$\heartsuit$以及$\Diamond$与表\ref{tbl:semicrf:chunk-stoa}
+		含义相同。
+		$*$的系统由于数据集划分与本章系统无法直接比较。
+	}{Table $\!$}{Comparison with the state-of-the-art NER systems.
+		$\clubsuit$, $\heartsuit$, and $\Diamond$ have
+		the same meanings with those in Table \ref{tbl:semicrf:chunk-stoa}.
+		$*$ marks the result which is not directly comparable due to using train and development splits for training.
+		\label{tbl:semicrf:ne-stoa}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{lc}
+		\toprule[1.5pt]
+		模型 & CoNLL03 \\
+		\midrule[1pt]
+		Flair embeddings$^{*\heartsuit\Diamond}$ \cite{akbik-blythe-vollgraf:2018:C18-1} & 93.09 \\
+		BERT Large$^\heartsuit$ \cite{DBLP:journals/corr/abs-1810-04805} & \textbf{92.8} \\
+		CVT+Multi-task (Large)$^{\clubsuit\heartsuit\Diamond}$ \cite{clark-EtAl:2018:EMNLP} & 92.6 \\
+		BiLSTM-CRF+ELMo$^{\heartsuit\Diamond}$ \cite{peters-EtAl:2018:N18-1} & 92.22 \\
+		TagLM$^{*\heartsuit\Diamond}$ \cite{peters-EtAl:2017:Long}& 91.93\\
+		HSCRF$^{\heartsuit\Diamond}$ \cite{ye-ling:2018:Short} & 91.38 \\
+		NCRF++ \cite{yang-zhang:2018:Demos} & 91.35 \\
+		LM-LSTM-CRF$^{\heartsuit\clubsuit\Diamond}$ \cite{Liu2018EmpowerSL} & 91.24 \\
+		BiLSTM-CRF-CNN \cite{ma-hovy:2016:P16-1} & 91.21 \\
+		LSTM-CRF \cite{lample-EtAl:2016:N16-1} & 90.94 \\
+		grRecNN (reported)$^\heartsuit$ \cite{zhuo-EtAl:2016:P16-1} & 90.87 \\
+		\midrule[0.5pt]
+		ours$^{\heartsuit\Diamond}$ & 92.33 \\
+		\bottomrule[1.5pt]
+	\end{tabular}
 \end{table}
 
 \begin{table}[t]
-	\centering
-	\begin{tabular}{r|r||c}
-		\hline
-		\it genre & \it model & CoNLL03 \\
-		\hline
-		\multirow{2}{*}{\it NN} & Collobert等人，2011\cite{Collobert:2011:NLP:1953048.2078186} & 89.59 \\
-		& Huang等人，2015\cite{DBLP:journals/corr/HuangXY15} & 90.10 \\
-		\hdashline[1pt/3pt]
-		\multirow{3}{*}{\it non-NN} & Ando与Zhang，2005\cite{Ando:2005:FLP:1046920.1194905} & 89.31 \\
-		& Guo等人，2014\cite{guo-EtAl:2014:EMNLP2014} & 88.58 \\
-		& Passos等人，2014\cite{passos-kumar-mccallum:2014:W14-16} & \bf 90.90 \\
-		\hline
-		\multicolumn{2}{r||}{our best} & 89.77 \\
-		\hline
+	\bicaption{}{中文分词的对比结果。$\dagger$代表使用字unigram做输入的系统；
+		$\ddagger$代表使用bigram做输入的系统；
+		$\heartsuit$以及$\Diamond$与表\ref{tbl:semicrf:chunk-stoa}
+		含义相同。
+		$*$的系统由于预处理的不同与本章系统无法直接比较。
+	}{Table $\!$}{Comparison with the state-of-the-art CWS systems.
+		$\dagger$ marks the system that uses unigram character as input.
+		$\ddagger$ marks the system that uses bigram character as input.
+		$\heartsuit$ and $\Diamond$ have
+		the same meanings with those in Table \ref{tbl:semicrf:chunk-stoa}.
+		$*$ marks the result that is not directly comparable due to prerocessing
+		on digits and English letters according to \cite{peng-dredze:2016:P16-2}.
+		\label{tbl:semicrf:cws-stoa}}
+	\vspace{0.5em}\centering\wuhao
+	\begin{tabular}{lc c c}
+		\toprule[1.5pt]
+		模型 & CTB6 & PKU & MSR \\
+		\midrule[1pt]
+		BiLSTM-CRF+hyper-param. search$^{\dagger\ddagger}$  \cite{ma-ganchev-weiss:2018:EMNLP} & \textbf{96.7} & 96.1 & \textbf{98.1} \\
+		Transition-based+emb. tuning$^{\dagger\ddagger}$  \cite{yang-zhang-dong:2017:Long} & 96.2 & \textbf{96.3} & 97.5 \\
+		Greedy Search+word context$^{\dagger}$ \cite{zhou-EtAl:2017:EMNLP2017} & 96.2 & 96.0 & 97.8 \\
+		BiLSTM-CRF+adv. loss$^{\dagger\ddagger}$ \cite{chen-EtAl:2017:Long2} & & 94.3 & 96.0 \\
+		Greedy Search+Span repr.$^{\dagger}$ \cite{cai-EtAl:2017:Short} & - & 95.8 & 97.1 \\
+		Greedy Search$^{\dagger}$ \cite{cai-zhao:2016:P16-1} & - & 95.7 & 96.4 \\
+		Gated Recursive NN$^{*\dagger\ddagger}$ \cite{chen-EtAl:2015:ACL-IJCNLP5} & 95.8 & 96.4 & 97.6 \\
+		LSTM$^{*\dagger\ddagger}$\cite{chen-EtAl:2015:EMNLP2} & 94.9 & 95.7 & 96.4 \\
+		Max-margin Tensor NN$^{\dagger\ddagger}$ \cite{pei-ge-chang:2014:P14-1} & - & 95.2 & 97.2 \\
+		CNN$^{\dagger}$ \cite{zheng-chen-xu:2013:EMNLP} & - & 92.4 & 93.3 \\
+		SRNN (reported)$^{\dagger}$ \cite{DBLP:journals/corr/KongDS15} & - & 90.6 & 90.7 \\
+		Sparse semi-CRF \cite{sun-EtAl:2009:NAACLHLT09} & - & 95.2 &  97.3 \\
+		Sparse transition-based \cite{zhang-clark:2007:ACLMain} & - & 95.1 & 97.2 \\
+		Auto-segmented Features$^\heartsuit$ \cite{wang-EtAl:2011:IJCNLP-2011} & 95.7 & - & - \\
+		\midrule[1pt]
+		ours$^{\dagger\heartsuit\Diamond}$ & 96.46 & 95.97 & 97.85 \\
+		\bottomrule[1.5pt]
 	\end{tabular}
-	\caption{Comparison with the state-of-the-art NER systems.}\label{tbl:semicrf:ne-stoa}
 \end{table}
 
-\begin{table}[t]
-	\centering
-	\setlength{\tabcolsep}{5.4pt}
-	\begin{tabular}{r|r||c c c}
-		\hline
-		\it genre & \it model & CTB6 & PKU & MSR \\
-		\hline
-		\multirow{4}{*}{\it NN} & Zheng等人，2013\cite{zheng-chen-xu:2013:EMNLP} & - & 92.4 & 93.3 \\
-		& Pei等人，2014\cite{pei-ge-chang:2014:P14-1} & & 94.0 & 94.9 \\
-		& Pei等人，2014\cite{pei-ge-chang:2014:P14-1} w/bigram & - & 95.2 & 97.2 \\
-		& Kong等人，2015\cite{DBLP:journals/corr/KongDS15} & & 90.6 & 90.7 \\
-		\hdashline[1pt/3pt]
-		\multirow{4}{*}{\it non-NN} & Tseng等人，2005\cite{Tseng05aconditional} & - & 95.0 & 96.4 \\
-		& Zhang与Clark，2007\cite{zhang-clark:2007:ACLMain} & - & 95.1 & 97.2 \\
-		& Sun等人，2009\cite{sun-EtAl:2009:NAACLHLT09} & - & 95.2 & 97.3 \\
-		& Wang等人，2011{\tiny }\cite{wang-EtAl:2011:IJCNLP-2011} &\bf 95.7 & - & - \\
-		\hline
-		\multicolumn{2}{r||}{our best} & 95.48 &\bf 95.67 &\bf 97.58 \\
-		\hline
-	\end{tabular}
-	\caption{Comparison with the state-of-the-art CWS systems.}\label{tbl:semicrf:cws-stoa}
-\end{table}
+本章也将本章的基于神经网络的semi-CRF模型与当前最优模型（state-of-the-art，简称SOTA）
+进行了对比。
+表\ref{tbl:semicrf:chunk-stoa}显示了组块识别的对比结果。
+本章基于神经网络的semi-CRF模型的表现优于
+除多任务学习\cite{clark-EtAl:2018:EMNLP}以及使用丰富字级别特征\cite{akbik-blythe-vollgraf:2018:C18-1}
+之外的大部分模型。
+由于文献\inlinecite{clark-EtAl:2018:EMNLP}中的多任务学习存在一个任务的测试集是另一个任务的训练集的情况，
+其结果并不能直接比较。\footnote{在文献\inlinecite{clark-EtAl:2018:EMNLP}
+	的多任务学习中，依存句法分析使用WSJ 2到21节作为训练数据。
+	而CoNLL00使用WSJ 20节做为测试数据，这使得模型学习过程中观察到测试数据。
+}
+通过与文献\inlinecite{akbik-blythe-vollgraf:2018:C18-1}的对比，
+本章认为通过加强输入表示，本章的模型有望取得更好的效果。
 
-最后，本文将只使用输入单元组合网络的模型与使用片段表示的模型进行了对比。
-表\ref{tbl:semicrf:tuning-effect}显示了对比的结果。\footnote{
-	本文通过开发集结果决定片段向量的选取（ SEmb-Homo或SEmb-Hetero）以及是否训练片段向量。}
-通过这一结果，显示片段表示能够有效地提高模型性能。
-在命名实体识别上，片段表示带来了0.7\%的提升；
-在中文分词上，片段表示带来了平均2.0\%的提升。
-
-本文将本文的模型与其他当前最优的命名实体识别模型以及分词模型进行了对比。
+%We compare our neural semi-CRF model leveraging multi-levels segment representation with other state-of-the-art NER and CWS systems.
 表\ref{tbl:semicrf:ne-stoa}显示了命名实体识别的比较结果。
-其中，第一组显示了使用神经网络的方法，第二组显示使用人工定义的特征的非神经网络的方法。
-文献\inlinecite{Collobert:2011:NLP:1953048.2078186}，
-文献\inlinecite{guo-EtAl:2014:EMNLP2014}
+这一结果与表\ref{tbl:semicrf:chunk-stoa}结果的趋势一致。
+即使用丰富输入表示\cite{akbik-blythe-vollgraf:2018:C18-1,DBLP:journals/corr/abs-1810-04805}
+以及多任务学习\cite{clark-EtAl:2018:EMNLP}
+可以给命名实体识别带来更好的性能。
+表\ref{tbl:semicrf:ne-stoa}显示，本章系统只比
+当前最优的应用BERT \cite{DBLP:journals/corr/abs-1810-04805}的命名实体识别系统
+低0.47。
+本章认为这一差距主要是由于学习上下文相关词向量时数据量的差异
+（BERT使用330万，ELMo使用80王），
+以及BERT的命名实体识别使用词片段以及篇章级表示。
+然而，值得注意的是本章模型比文献\inlinecite{peters-EtAl:2017:Long,peters-EtAl:2018:N18-1}中
+使用ELMo的模型效果好。
+这显示本章使用片段向量的有效性。
+
+本章在表\ref{tbl:semicrf:cws-stoa}中将本章系统与其他最先进的中文分词模型进行了比较。
+表\ref{tbl:semicrf:cws-stoa}显示了使用字符bigram作为输入对于前人工作的重要性。
+本章在只使用unigram的前提下取得了与前人最优系统相近的性能。
+在CTB6上，本章模型只低于文献\inlinecite{ma-ganchev-weiss:2018:EMNLP}
+提出的当前最优的精细调参biLSTM-CRF模型低0.24。
+在PKU上，本章与前人最优系统的差距是0.33，
+在MSR上，这一差距是0.25。
+需要指出的是，表\ref{tbl:semicrf:cws-stoa}
+中的所有前人工作均为单一结果。
+而本章报告了多次运行的平均值，
+因而报告的结果更稳定可靠。
+
+本章提出的模型在三个中文分词任务上相对前人最优系统的平均差距为0.29。
+可以认为本章提出的模型达到了与前人最优系统相近的性能。
+这一结果再次显示了使用semi-CRF建模分割问题，
+并合理表示片段的有效性。
+
+\section{相关工作}[Related Work]
+Semi-CRF已经在诸如
+信息抽取\cite{NIPS2005_427}、
+命名实体识别\cite{okanohara-EtAl:2006:COLACL}、
+意见挖掘\cite{yang-cardie:2012:EMNLP-CoNLL}、
+流利检测\cite{ferguson-durrett-klein:2015:NAACL-HLT}
 以及
-文献\inlinecite{passos-kumar-mccallum:2014:W14-16}
-也使用实体词典作为额外信息。 
-在不使用任何额外信息的条件下，
-本文提出的模型取得了与前人使用额外信息的模型相近的结果。
+中文分词\cite{andrew:2006:EMNLP,sun-EtAl:2009:NAACLHLT09}
+等多项NLP任务中取得了成功。
+然而，这些工作大多采用离散特征作为输入。
+semi-CRF与神经网络的结合的研究相对较少。
+文本基于文献\inlinecite{DBLP:journals/corr/KongDS15,zhuo-EtAl:2016:P16-1,ye-ling:2018:Short}
+中的基于神经网络的semi-CRF工作，
+并进行了若干有意义的拓展。
+除此之外，本章详细地研究了基于神经网络的semi-CRF中的重要组成部分。
 
-本文在表\ref{tbl:semicrf:cws-stoa}中将本文系统与其他最先进的中文分词模型进行了比较。
-表\ref{tbl:semicrf:cws-stoa}的第一组显示的是基于神经网络的方法，第二组显示的是基于人工特征的方法。
-本文基于神经网络的semi-CRF模型在PKU以及MSR两个数据集上获得了最好的性能。
-在CTB6数据集上，本文模型的结果也接近Wang等人2011年在文献\inlinecite{wang-EtAl:2011:IJCNLP-2011} 
-中提出的使用半监督特征的模型。
-根据文献\inlinecite{pei-ge-chang:2014:P14-1}，
-在基于神经网络的中文分词中使用字的bigram作为输入能够取得显著的效果提升。
-然而，出于模型统一性的考量，本文并未使用这一技巧。
+序列标注是一种常用的分割任务的转化方式。
+前人研究表明，
+通过丰富输入表示，
+即使使用简单的结构模型，
+序列标注模型可以也取得很好的分割准确率\cite{peters-EtAl:2017:Long,peters-EtAl:2018:N18-1,DBLP:journals/corr/abs-1810-04805,akbik-blythe-vollgraf:2018:C18-1,Liu2018EmpowerSL}。
+本章在使用ELMo作为输入的情况下也观察到了性能的提升，
+这证明即使在
+很强的表示模型中，
+合理地建模结构仍然对模型有帮助。
 
-\section{结论}[Conclusion]
+使用自动分析的数据帮助中文分词的已经在文献\inlinecite{wang-EtAl:2011:IJCNLP-2011}
+中得到研究。
+但他们的工作基于特征工程，
+同时只从自动分析的数据中求算统计量作为特征，
+而不关注自动分析的结果是什么。
+得益于近期词向量\cite{NIPS2013_5021}的相关工作，
+本章提出的方法可以显示地完整地表示自动分析的结果。
 
-本文研究了在semi-CRF模型中使用神经网络表示片段的问题。
-本文提出了使用拼接网络将输入单元组合为片段表示。
-取得了与SRNN接近的性能与更快的运行速度。
-本文同时提出将片段整体进行表示并将得到的片段向量作为一种额外的
+本章将本章方法在三个自然语言分割任务上
+进行了实验。其中包括组块识别、命名实体识别以及中文分词。
+然而，很多自然语言处理任务也可以建模为分割问题，
+比如流畅检测\cite{ferguson-durrett-klein:2015:NAACL-HLT}、信息抽取
+以及对话系统中的语义理解\cite{6998838}。
+在这些任务中使用本章方法也是一个值得探索的。
+
+\section{本章小结}[Conclusion]
+本章全面地研究了在semi-CRF模型中使用神经网络表示片段的问题。
+本章提出了使用拼接网络将输入单元组合为片段表示。
+这种方法取得了与SRNN和grRecNN相近的准确率与更快的速度。
+本章同时提出将片段整体进行表示并将得到的片段向量作为一种额外的
 表示加入片段表示中。
-实验结果表明这一技术能够显著提高模型性能。
-命名实体识别以及中文分词实现证明了本文提出的模型的有效性。
-同时，在两个中文分词数据集上，本文模型取得了当时最优的性能。
+实验结果表明这一技术能够显著提高模型性能，特别是对片段多样性较低的数据。
+组块识别、命名实体识别以及中文分词实验证明了本章提出的模型的有效性。
+同时，本章也对基于神经网络的semi-CRF的各部分进行了全面的分析。
+分析显示建模任务相关的上下文对semi-CRF的性能至关重要。
+
+在此基础上，
+本章将上下文相关词向量与semi-CRF进行结合，
+以研究其针对片段的组合能力。
+本章研究表明上下文相关词向量可以通过简单组合进行片段表示并获得模型性能提升。
+在上下文相关词向量的基础上进一步进行任务相关的上下文表示可以带来更大的提升。
+通过这一方法，本章模型取得了与前人最优结果相当的性能。
